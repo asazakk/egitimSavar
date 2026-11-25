@@ -154,6 +154,16 @@ globalThis.UEK_FINDINGS = [
     fix: 'handleGonder() eklendi: Gönder/Submit düğmesi bulunup tıklanıyor; pasifse önce sırayla bir seçenek işaretleniyor. İLERİ ve medya beklemesinden önce çalışır. Ekran başına 12 deneme sınırı var; aşılırsa rapora uyarı düşer. İçinde "sınav" geçen gerçek sınav formlarında otomatik gönderilmez.',
   },
   {
+    id: 'F16',
+    severity: 'high',
+    status: 'fixed',
+    file: 'page-guard.js / content.js',
+    title: 'Başka sekmeye geçince eğitim duruyordu',
+    problem:
+      'Sekme arka plana alınınca sayfanın kendi betikleri videoyu duraklatıyordu. Önceki düzeltme (document.hidden değerini izole dünyada wrappedJSObject ile değiştirmek) sayfanın pause() çağrılarını ve window blur olaylarını yakalamıyordu.',
+    fix: 'Yeni page-guard.js sayfa dünyasında (world: MAIN, document_start) çalışır: document.hidden ve visibilityState sayfaya "görünür" döner; visibilitychange ve pencere blur olayları sayfaya ulaşmadan kesilir; sekme GERÇEKTEN arka plandayken gelen pause() çağrıları yok sayılır (kullanıcı arka plandayken etkileşemeyeceği için bunlar sayfanın kendi duraklatmasıdır). Gerçek görünürlük durumu içerik betiğine iletilir; raporda "Sekme arka planda; oynatma korunuyor" görünür ve kaç duraklatma engellendiği kalp atışında yazılır. Form alanlarının blur olayları korunur.',
+  },
+  {
     id: 'N01',
     severity: 'low',
     status: 'note',

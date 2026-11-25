@@ -40,6 +40,12 @@ Chrome'da görünürlük geçersiz kılma (sekme arka plana geçse de oynatmanı
 - Durdurmak: rapor sayfasında **Tümünü durdur** (Firefox'ta `window.__uekExt.stop()` sayfa konsolundan çalışmaz)
 - Sınav çıktığında elle cevap verin
 
+## v1.6.1 — arka plan oynatması
+
+- **Sekme değişince durma düzeltildi:** Eğitim sayfası başka sekmeye geçildiğinde kendi kendini duraklatıyordu. Yeni `page-guard.js` sayfa dünyasında çalışıyor: sayfaya "görünür" durumu bildiriyor, görünürlük ve pencere blur olaylarını kesiyor ve sekme gerçekten arka plandayken gelen duraklatmaları yok sayıyor. Ayrıntı: rapor → **Kod inceleme** → F16.
+- Rapor, arka plan geçişlerini ve engellenen duraklatma sayısını gösterir.
+- **Firefox 128 veya üzeri gerekir** (`world: MAIN` içerik betikleri bu sürümden itibaren destekleniyor).
+
 ## v1.6.0 — egitimSavar
 
 - Proje adı **egitimSavar** oldu (eklenti adı, simge, popup, rapor, konsol etiketi `[egitimSavar]`). Yeni simge: `icons/` (kaynak: `icon.svg`).

@@ -732,48 +732,56 @@
   }
 
   // --- visibility ---
-  function installFocusGuards() {
-    // Içerik betiği izole dünyada çalışır: document üzerine defineProperty yapmak sayfanın
-    // kendi betiklerini etkilemez. Firefox'ta sayfa nesnesine wrappedJSObject + exportFunction
-    // ile ulaşılır. (Bkz. rapor: F06)
-    try {
-      const pageDoc = document.wrappedJSObject;
-      if (pageDoc && typeof exportFunction === 'function') {
-        Object.defineProperty(pageDoc, 'hidden', {
-          configurable: true,
-          get: exportFunction(() => false, window),
-        });
-        Object.defineProperty(pageDoc, 'visibilityState', {
-          configurable: true,
-          get: exportFunction(() => 'visible', window),
-        });
-        if (pageDoc.hidden === false && pageDoc.visibilityState === 'visible') {
-          log('Sekme görünürlüğü sayfaya "görünür" olarak bildiriliyor.');
-        } else {
-          warn('Görünürlük geçersiz kılma doğrulanamadı.');
-        }
-      } else {
-        // Chrome'da beklenen durum: görünürlük geçersiz kılması yalnız Firefox'ta yapılır
-        log('Görünürlük geçersiz kılma bu tarayıcıda yok (yalnız Firefox); oynatma yine de sürer.');
-      }
-    } catch (e) {
-      warn('Görünürlük geçersiz kılma uygulanamadı:', e.message || e);
+  /**
+   * Sekme görünürlüğü. Sayfa tarafı page-guard.js (world: MAIN) ile yapılır: sahte "görünür"
+   * durum, olay kesme ve arka plandayken pause() engeli. Bu fonksiyon yalnızca o betiğin
+   * bildirdiği gerçek durumu takip eder, oynatmayı geri açar ve raporlar.
+   */
+  const visibility = { hidden: false, guardReady: false, pauseBlocked: 0, lastPauseLogAt: 0 };
+
+  function resumeAfterVisibility() {
+    const { player, media } = resolveBundle();
+    if (!isEnded(player, media)) {
+      playSafe(player, media);
+      applyPlayback(player, media);
     }
-    const resume = () => {
-      const { player, media } = resolveBundle();
-      if (!isEnded(player, media)) {
-        playSafe(player, media);
-        applyPlayback(player, media);
+  }
+
+  /** page-guard.js (MAIN dünya) mesajları. İki dünya ayrı window nesnesi gördüğü için postMessage. */
+  function onGuardMessage(ev) {
+    if (ev.source !== window || !ev.data || ev.data.__egitimSavar !== true) return;
+    const d = ev.data;
+    if (d.kind === 'ready') {
+      visibility.guardReady = true;
+    } else if (d.kind === 'visibility') {
+      const was = visibility.hidden;
+      visibility.hidden = !!d.hidden;
+      if (visibility.hidden && !was) {
+        ok('Sekme arka plana geçti — oynatma sürdürülüyor.');
+      } else if (!visibility.hidden && was) {
+        ok('Sekme yeniden öne geldi.');
+        resumeAfterVisibility();
       }
-    };
-    // window capture: sayfanın document üzerindeki visibilitychange dinleyicilerinden önce çalışır
-    // ve olayı keser; böylece Storyline/Video.js arka plana geçince oynatmayı durdurmaz.
-    on(window, 'visibilitychange', (ev) => {
-      try { ev.stopImmediatePropagation(); } catch (_) { /* ignore */ }
-      resume();
-    }, true);
-    on(window, 'blur', resume, true);
-    on(window, 'focus', resume, true);
+    } else if (d.kind === 'pause-blocked') {
+      visibility.pauseBlocked = d.count;
+      // Log taşmasın: en fazla 15 sn'de bir özetle. Oynatma zaten sürüyor (pause yok sayıldı).
+      const now = Date.now();
+      if (now - visibility.lastPauseLogAt > 15000) {
+        visibility.lastPauseLogAt = now;
+        ok(`Arka plandayken sayfanın duraklatması engellendi (toplam ${d.count}).`);
+      }
+    }
+  }
+
+  function installFocusGuards() {
+    on(window, 'message', onGuardMessage);
+    on(window, 'focus', resumeAfterVisibility, true);
+    // page-guard hiç çalışmadıysa (eski tarayıcı, sayfa CSP vb.) bunu raporla
+    trackTimeout(() => {
+      if (!visibility.guardReady) {
+        warn('Sayfa koruması (page-guard) yüklenmedi — arka plan oynatması garanti değil.');
+      }
+    }, 2500);
   }
 
   // --- SCORM next / hotspots ---
@@ -1529,6 +1537,8 @@
         muted: media ? !!media.muted || media.volume === 0 : null,
         paused: media || player ? isPaused(player, media) : null,
         quiz: state.quizPaused,
+        hidden: visibility.hidden,
+        pauseBlocked: visibility.pauseBlocked,
         held: !!state.heldSlide,
         idleSec: Math.round((Date.now() - state.lastActivityAt) / 1000),
         nextClicks: state.nextClicks,

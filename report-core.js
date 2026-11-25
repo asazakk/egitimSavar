@@ -47,7 +47,12 @@
       return { key: 'stalled', label: 'Takıldı', cls: 'b-bad', hint: `${main.idleSec} sn'dir ilerleme yok.` };
     }
     if (main && main.paused === false) {
-      return { key: 'playing', label: 'Oynatılıyor', cls: 'b-good', hint: '' };
+      return {
+        key: 'playing',
+        label: 'Oynatılıyor',
+        cls: 'b-good',
+        hint: main.hidden ? 'Sekme arka planda; oynatma korunuyor.' : '',
+      };
     }
     return { key: 'running', label: 'Çalışıyor', cls: 'b-info', hint: 'Geçiş / bekleme.' };
   }
