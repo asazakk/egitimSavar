@@ -1,115 +1,174 @@
 ﻿# egitimSavar
 
-<img src="icons/icon-128.png" alt="egitimSavar" width="64" align="right">
+<img src="icons/icon-128.png" alt="egitimSavar" width="72">
 
-Uzaktan Eğitim Kapısı eğitimlerini otomatik izler (Firefox + Chrome): ScormV2 (cross-origin Storyline) ve Video.js sayfalarında videoyu hızlandırır, sesi kapatır, İLERİ ile sıradakine geçer, "izlemeye devam" onayını verir, video içi **Gönder** ekranlarını geçer. Gerçek sınavda durur. Simge üzerinde ve rapor sayfasında canlı takip sunar.
+Uzaktan Eğitim Kapısı videolarını kendi kendine izler. **Firefox 128+** ve **Chrome**.
 
-Aynı klasör Chrome'da da çalışır (aşağıdaki "Chrome" bölümüne bakın).
+```mermaid
+flowchart LR
+  A[Video açılır] --> B[Hızlanır, ses kapanır]
+  B --> C[İLERİ]
+  C --> D{Sınav mı?}
+  D -->|Hayır| A
+  D -->|Evet| E[Durur, sen cevap verirsin]
+```
 
-## Kurulum (geçici / geliştirme)
+Video içi **Gönder** ve “izlemeye devam” ekranlarını da geçer. Gerçek sınavda durur. Simge ve rapor sayfası canlı durumu gösterir.
 
-1. Firefox’ta `about:debugging#/runtime/this-firefox` açın
-2. **Geçici Eklenti Yükle…** → bu klasördeki `manifest.json` dosyasını seçin
-3. `about:addons` → eklenti → **İzinler**: site erişimi kapalıysa açın (Firefox MV3'te site izinleri otomatik verilmeyebilir)
-4. Eğitim sekmesini yenileyin. Konsola betik yapıştırmayın; eklenti Storyline çerçevesinde kendiliğinden başlar.
-5. Eklenti simgesi → **Raporu aç**: pencere durumunu görün (aşağıya bakın)
+---
 
-> Geçici eklenti Firefox kapanınca kalkar; her oturumda yeniden yüklemeniz gerekir.
+## Firefox’a yükle
 
-## Chrome (geliştirici modu)
+Her oturumda bir kez. Firefox kapanınca geçici eklenti silinir.
 
-1. Chrome'da `chrome://extensions` sayfasını açın.
-2. Sağ üstte **Geliştirici modu**nu açın.
-3. **Paketlenmemiş öğe yükle** → bu klasörü seçin (`manifest.json` kökte olmalı).
-4. Eklenti kartında site erişimini "Belirli sitelerde" ya da "Tüm sitelerde" olarak bırakın.
-5. Eğitim sekmesini yenileyin. Rapor için eklenti simgesi → **Raporu aç**.
+```mermaid
+flowchart TD
+  1["1. Adres çubuğu"] --> 2["2. Geçici Eklenti Yükle"]
+  2 --> 3["3. manifest.json"]
+  3 --> 4["4. İzinler"]
+  4 --> 5["5. Eğitim sekmesini yenile"]
+```
 
-Chrome'da görünürlük geçersiz kılma (sekme arka plana geçse de oynatmanın sürmesi) uygulanmaz; bu yalnız Firefox'a özgüdür. Pencereler ayrı olduğu sürece oynatma normal çalışır.
+| | Ne yap |
+|---|---|
+| **1** | Adres çubuğuna yapıştır: `about:debugging#/runtime/this-firefox` |
+| **2** | **Geçici Eklenti Yükle…** |
+| **3** | Bu klasördeki `manifest.json` dosyasını seç. Klasörün kendisini değil, dosyayı seç. |
+| **4** | `about:addons` → egitimSavar → **İzinler** → site erişimi kapalıysa aç |
+| **5** | Eğitim sekmesini yenile. Konsola kod yapıştırma. |
 
-## Kalıcı yükleme (isteğe bağlı)
+Simge → **Ayrıntılı raporu aç**.
 
-1. Paketi üretin: `npx web-ext build --source-dir .` → `web-ext-artifacts/` içinde `.zip` çıkar. Bu dosyanın adını `.xpi` yapın.
-2. `about:addons` → dişli simgesi → **Dosyadan eklenti yükle…** → `.xpi` dosyasını seçin.
-   - Klasörü, `manifest.json` dosyasını ya da içinde üst klasör bulunan bir zip'i seçerseniz Firefox "bozuk" uyarısı verir. Paket kökünde `manifest.json` olmalıdır.
-   - Firefox sürümünüz imzasız eklentiyi reddederse "doğrulanamadı" uyarısı çıkar. Bu durumda AMO'da imzalatın ya da Firefox Developer / ESR'de `xpinstall.signatures.required` ayarını kapatın (yalnızca bilinçli kullanım).
-3. Günlük kullanım için `about:debugging` ile geçici yükleme daha pratiktir (yukarıdaki kurulum).
+Eski **UEK Otomatik İzleyici** yüklüyse kaldır. Kimlik değişti (`egitimsavar@local`); Firefox bunu ayrı eklenti sayar.
 
-## Kullanım
+---
 
-- Sekmeyi açık tutun
-- Durdurmak: rapor sayfasında **Tümünü durdur** (Firefox'ta `window.__uekExt.stop()` sayfa konsolundan çalışmaz)
-- Sınav çıktığında elle cevap verin
+## Chrome’a yükle
 
-## v1.6.1 — arka plan oynatması
+Kalıcı kalır; tarayıcı kapanınca silinmez.
 
-- **Sekme değişince durma düzeltildi:** Eğitim sayfası başka sekmeye geçildiğinde kendi kendini duraklatıyordu. Yeni `page-guard.js` sayfa dünyasında çalışıyor: sayfaya "görünür" durumu bildiriyor, görünürlük ve pencere blur olaylarını kesiyor ve sekme gerçekten arka plandayken gelen duraklatmaları yok sayıyor. Ayrıntı: rapor → **Kod inceleme** → F16.
-- Rapor, arka plan geçişlerini ve engellenen duraklatma sayısını gösterir.
-- **Firefox 128 veya üzeri gerekir** (`world: MAIN` içerik betikleri bu sürümden itibaren destekleniyor).
+```mermaid
+flowchart TD
+  1["1. chrome://extensions"] --> 2["2. Geliştirici modu"]
+  2 --> 3["3. Paketlenmemiş öğe yükle"]
+  3 --> 4["4. Bu klasör"]
+  4 --> 5["5. Eğitim sekmesini yenile"]
+```
 
-## v1.6.0 — egitimSavar
+| | Ne yap |
+|---|---|
+| **1** | Adres çubuğuna yapıştır: `chrome://extensions` |
+| **2** | Sağ üst: **Geliştirici modu** |
+| **3** | **Paketlenmemiş öğe yükle** |
+| **4** | Bu klasörü seç (`manifest.json` klasörün içinde olsun) |
+| **5** | Site erişimi “Belirli sitelerde” veya “Tüm sitelerde” kalsın. Eğitim sekmesini yenile. |
 
-- Proje adı **egitimSavar** oldu (eklenti adı, simge, popup, rapor, konsol etiketi `[egitimSavar]`). Yeni simge: `icons/` (kaynak: `icon.svg`).
-- **Video içi "Gönder":** videonun ortasında çıkıp oynatmayı duraklatan soru/anket ekranındaki **Gönder** düğmesi otomatik tıklanır. Düğme pasifse (seçim yapılmadan açılmıyorsa) önce sırayla bir seçenek işaretlenir. Ekran başına en çok 12 deneme yapılır; aşılırsa rapora "elle tıklayın" uyarısı düşer. İçinde "sınav" geçen gerçek sınav formlarında otomatik gönderilmez.
-- Eklenti kimliği `egitimsavar@local` oldu; Firefox bunu yeni bir eklenti sayar. Eski "UEK Otomatik İzleyici"yi kaldırın.
-- İç anahtarlar (`storage` anahtarları `uek*`, mesaj türleri `uek-*`, `window.__uekExt`) kayıtlı ekranlar kaybolmasın diye aynı bırakıldı.
+Sekme arkadayken oynatmanın sürmesi yalnız Firefox’ta var. Chrome’da pencere önde kalsın.
 
-## Simge üzerinde canlı özet (v1.5.1)
+---
 
-- **Simgenin üzerine gelince:** çok satırlı özet görünür (kaç pencere çalışıyor / dikkat gerektiriyor / sırada / kapandı, her pencerenin durumu, medya yüzdesi, slayt). Tarayıcılar fare üzerine gelince yalnız düz metin tooltip'e izin verir; zengin panel için simgeye tıklayın.
-- **Rozet:** yeşil sayı = çalışan pencere sayısı, kırmızı `!` = takılan / bağlantısı kesilen / son 5 dakikada hata veren pencere var, turuncu `?` = sınav elle cevap bekliyor, gri sayı = yalnız sırada bekleyen var.
-- **Simgeye tıklayınca:** popup'ın üstünde canlı durum kartı (çipler, pencere başına durum ve ilerleme çubuğu). Kendiliğinden yenilenir.
-- Tooltip ve rozet, `alarms` izniyle 30 sn'de bir yenilenir; böylece heartbeat kesilen pencereler de görünür.
+## Günlük kullanım
 
-## Rapor sayfası (v1.5.0)
+```mermaid
+flowchart TD
+  A[Sekme açık kalsın] --> B[Eklenti izler]
+  B --> C{Ne oldu?}
+  C -->|Sınav| D[Elle cevap ver]
+  C -->|Bitti| E[Pencereyi kapat]
+  C -->|Durdur| F[Rapor: Tümünü durdur]
+```
 
-Araç çubuğu simgesi → **Ayrıntılı raporu aç** (`report.html`). Kendiliğinden yenilenir.
+- Durdurmak: simge → **Ayrıntılı raporu aç** → **Tümünü durdur**
+- Sınav çıkınca eklenti bekler; cevap sende
 
-- **Canlı takip:** her eğitim penceresi için durum (Oynatılıyor / Çalışıyor / Sınav bekliyor / Takıldı / Bağlantı yok / Durduruldu / Kapandı), slayt, medya ilerlemesi, hız, ses durumu, İLERİ sayısı, süre ve son sinyal. Satıra tıklayınca o pencerenin zaman çizelgesi açılır. Sırada bekleyen eğitimler altta listelenir.
-- **Olay günlüğü:** tüm pencerelerin olayları; seviye, pencere ve metne göre süzülür.
-- **Kod inceleme:** v1.4.4 incelemesinde bulunan hatalar, çözümleri ve bilinen sınırlamalar. Her madde "Doğruladım" diye işaretlenebilir (işaretler kalıcıdır).
-- **JSON dışa aktar / Raporu temizle / Tümünü durdur** düğmeleri.
+---
 
-Rapor verisi `storage.local` içinde tutulur (en çok 40 pencere, pencere başına son 300 olay).
+## Birden fazla ekran
 
-## Birden fazla ekran (v1.4.0)
+```mermaid
+flowchart LR
+  A[Pencereyi monitöre taşı] --> B[Bu ekranı kaydet]
+  B --> C[Eğitimleri bul]
+  C --> D[Ekranlara dağıt]
+  D --> E[Biten kapanır, sıradaki açılır]
+```
 
-Araç çubuğundaki eklenti simgesi:
-
-1. Firefox penceresini bir monitöre taşıyın → **Bu ekranı kaydet**. Diğer monitörler için tekrarlayın.
-2. Katalog sekmesinde **Bu sayfadaki eğitimleri bul** (veya adresleri yapıştırın).
+1. Firefox penceresini bir monitöre taşı → **Bu ekranı kaydet**. Diğer monitörler için tekrarla.
+2. Katalog sekmesinde **Bu sayfadaki eğitimleri bul** (adres yapıştırmak da olur).
 3. **Seçilenleri ekranlara dağıt.** Her kayıtlı ekranda bir pencere açılır; fazlası sıraya girer.
-4. Eğitim bitince o pencereyi kapatın. Sıradaki, aynı ekran konumunda açılır.
+4. Eğitim bitince o pencereyi kapat. Sıradaki aynı yerde açılır.
 
-Kayıtlı ekran yoksa en fazla 3 pencere bu monitörde açılır. Ayrı penceredeki sekme arka plan sekmesi sayılmaz; otomatik ilerleme her pencerede ayrı çalışır.
+Kayıtlı ekran yoksa bu monitörde en fazla 3 pencere açılır.
 
-## Chrome’dan farklar
+---
 
-| | Chrome | Firefox |
-|--|--|--|
-| Background | `service_worker` (ve `scripts`, Firefox yok sayar) | `background.scripts` (`service_worker` yok sayılır) |
-| Kimlik | yok | `browser_specific_settings.gecko.id` |
-| Yükleme | `chrome://extensions` paketlenmemiş öğe | `about:debugging` geçici eklenti |
+## Simge ne anlatır
 
-## v1.5.0
+| Rozet | Anlam |
+|---|---|
+| Yeşil sayı | Kaç pencere çalışıyor |
+| Kırmızı `!` | Takıldı, bağlantı koptu veya son 5 dk’da hata |
+| Turuncu `?` | Sınav, elle cevap bekliyor |
+| Gri sayı | Yalnız sırada bekleyen var |
 
-Kod incelemesi + rapor sayfası. Öne çıkan düzeltmeler: Türkçe harf (İLERİ/ÇIKIŞ) eşleştirme hatası, ScormV2 üst sayfasının yanlış modda çalışması, her SweetAlert onayının tıklanması, Video.js'te sıradaki derse geçilmemesi, videoyu izlemeden İLERİ'ye basılması, dağıtım sırasının bozulması. Ayrıntı: rapor sayfası → **Kod inceleme**.
+Fareyle üzerine gelince kısa özet çıkar. Ayrıntı için simgeye tıkla: durum kartı kendiliğinden yenilenir.
 
-## v1.4.4
+---
 
-Yükleyip eğitim sekmesini yenilemek yeter. İLERİ yalnız açıkken basılır. Kilitliyken sekme, açılır panel ve “tıklayın / devam” alanları tıklanır. Sıra Sizde: seçenek → Kontrol Et → Doğru Cevabı Gör. Aynı slaytta 3 dakika ilerleme yoksa zorunlu tık durur. Durdurmak: `window.__uekExt.stop()`
+## Rapor
 
-## v1.3.1 (Sıra Sizde)
+Simge → **Ayrıntılı raporu aç**.
 
-İLERİ, Sıra Sizde’de seçenek işaretlenmeden açılmıyor. Eklenti:
+| Bölüm | Ne var |
+|---|---|
+| Canlı takip | Oynatılıyor, sınav, takıldı, kapandı… Slayt, yüzde, hız, ses. Satıra tıklayınca zaman çizelgesi. |
+| Olay günlüğü | Tüm pencereler. Seviye, pencere ve metne göre süzülür. |
+| Kod inceleme | Bilinen hatalar ve sınırlar. “Doğruladım” işaretleri kalır. |
 
-1. `acc-checkbox` / seçenekleri işaretler  
-2. **Kontrol Et** tıklar  
-3. Gerekirse **Doğru Cevabı Gör**  
-4. İLERİ açılınca soft click
+Düğmeler: **JSON dışa aktar**, **Raporu temizle**, **Tümünü durdur**.
 
-## v1.3.0 (SCORM Anasayfa düşmesi)
+Kayıt tarayıcıda durur: en çok 40 pencere, pencerede son 300 olay.
 
-- SCORM hızı 4x, rastgele hotspot kapalı
-- İLERİ yalnız açıkken soft click
-- Ana Sayfa / çıkış tıklama engeli
+---
 
+## Kalıcı Firefox paketi
+
+Günlük iş için üstteki geçici yükleme yeter. Kalıcı istersen:
+
+1. `npx web-ext build --source-dir .`
+2. `web-ext-artifacts/` içindeki `.zip` adını `.xpi` yap
+3. `about:addons` → dişli → **Dosyadan eklenti yükle…** → `.xpi`
+
+Paket kökünde `manifest.json` olmalı. Üst klasörlü zip, “bozuk” der. İmzasız paket reddedilirse AMO’da imzalat veya Firefox Developer / ESR’de `xpinstall.signatures.required` kapat (yalnız bilinçli kullanım).
+
+---
+
+## Sürüm notları
+
+<details>
+<summary>v1.6.1 — arka planda oynatma</summary>
+
+Sekme değişince videonun kendi kendini durdurması düzeltildi. `page-guard.js` sayfaya “görünür” der, blur olaylarını keser, gerçekten arkadayken gelen duraklatmaları yok sayar. Rapor, arka plan geçişlerini ve engellenen duraklatma sayısını gösterir. Ayrıntı: rapor → **Kod inceleme** → F16. **Firefox 128+** gerekir.
+
+</details>
+
+<details>
+<summary>v1.6.0 — egitimSavar</summary>
+
+Ad, simge, popup, rapor ve konsol etiketi `[egitimSavar]`. Video ortasındaki **Gönder** otomatik tıklanır; düğme kilitliyse önce bir seçenek işaretlenir. Ekran başına en çok 12 deneme; aşılırsa raporda “elle tıklayın” yazar. “Sınav” geçen formlara otomatik gönderilmez. Eski eklentiyi kaldır.
+
+</details>
+
+<details>
+<summary>v1.5 — rapor ve simge</summary>
+
+Canlı rapor, rozet, tooltip. Türkçe İLERİ/ÇIKIŞ eşleşmesi, ScormV2 modu, SweetAlert, Video.js sıradaki ders, izlemeden İLERİ, dağıtım sırası düzeltildi. Ayrıntı: rapor → **Kod inceleme**.
+
+</details>
+
+<details>
+<summary>v1.4 ve öncesi</summary>
+
+İLERİ yalnız açıkken basılır. Kilitliyken panel ve “devam” alanları tıklanır. Sıra Sizde: seçenek → Kontrol Et → Doğru Cevabı Gör. Aynı slaytta 3 dakika ilerleme yoksa zorunlu tık durur. SCORM hızı 4x. Ana Sayfa / çıkış tıklanmaz.
+
+</details>
