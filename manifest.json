@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "egitimSavar",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Uzaktan Eğitim Kapısı eğitimlerini ayrı ekran pencerelerinde otomatik oynatır: hızlandırır, sesi kapatır, ilerletir ve takip raporu sunar.",
   "icons": {
     "16": "icons/icon-16.png",

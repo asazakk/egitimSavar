@@ -164,6 +164,16 @@ globalThis.UEK_FINDINGS = [
     fix: 'Yeni page-guard.js sayfa dünyasında (world: MAIN, document_start) çalışır: document.hidden ve visibilityState sayfaya "görünür" döner; visibilitychange ve pencere blur olayları sayfaya ulaşmadan kesilir; sekme GERÇEKTEN arka plandayken gelen pause() çağrıları yok sayılır (kullanıcı arka plandayken etkileşemeyeceği için bunlar sayfanın kendi duraklatmasıdır). Gerçek görünürlük durumu içerik betiğine iletilir; raporda "Sekme arka planda; oynatma korunuyor" görünür ve kaç duraklatma engellendiği kalp atışında yazılır. Form alanlarının blur olayları korunur.',
   },
   {
+    id: 'F17',
+    severity: 'high',
+    status: 'fixed',
+    file: 'page-guard.js',
+    title: 'Sekme değişince eğitim hâlâ duruyordu (F16 eksik kaldı)',
+    problem:
+      'F16 yalnız document.hidden, visibilitychange, blur ve pause() yollarını kapatıyordu. Sayfa "document.hasFocus()" yokluyorsa duraklatabiliyordu. Ayrıca tarayıcı arka planda requestAnimationFrame\'i durdurur; Storyline zaman çizelgesi buna bağlı olduğundan slayt, video çalışsa bile ilerlemiyordu. Chrome ayrıca 5 dk sonra arka plan zamanlayıcılarını dakikada 1\'e düşürür.',
+    fix: 'hasFocus() her zaman true döner; webkit/moz önekli görünürlük alanları da sahtelenir; document blur\'ü de kesilir. Sekme gizliyken bekleyen requestAnimationFrame geri çağrıları 250 ms\'lik bir zamanlayıcıyla yürütülür. Chrome\'un yoğun kısıtlamasından kaçınmak için sayfa bir Web Lock tutar.',
+  },
+  {
     id: 'N01',
     severity: 'low',
     status: 'note',
