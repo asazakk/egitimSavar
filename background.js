@@ -1,6 +1,6 @@
 /**
  * egitimSavar — arka plan betiği (Firefox: background.scripts, Chrome: service_worker)
- * İçerik betiği logları + eğitimleri ayrı pencerelere dağıtma + rapor deposu.
+ * İçerik betiği logları + eğitimleri ayrı sekmelere / pencerelere dağıtma + rapor deposu.
  */
 const api = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -66,12 +66,14 @@ function reportMutate(fn) {
   return reportTail;
 }
 
-function newSession(key, item, map) {
-  const mapped = item.windowId != null ? map[String(item.windowId)] : null;
+function newSession(key, item, map, tabMap) {
+  const mapped = (item.tabId != null && tabMap && tabMap[String(item.tabId)])
+    || (item.windowId != null ? map[String(item.windowId)] : null);
   return {
     id: key,
     windowId: item.windowId,
-    title: (mapped && mapped.title) || item.tabTitle || 'Eğitim',
+    tabId: item.tabId,
+    title: (mapped && mapped.title) || item.title || item.tabTitle || 'Eğitim',
     url: item.url || (mapped && mapped.url) || '',
     managed: !!mapped,
     startedAt: item.ts,
@@ -93,20 +95,28 @@ function pushEvent(session, ts, level, text, frame) {
   }
 }
 
+function sessionKeyFor(item, tabMap) {
+  if (item.sessionKey) return item.sessionKey;
+  if (item.tabId != null && tabMap && tabMap[String(item.tabId)]) return `t${item.tabId}`;
+  if (item.windowId == null) return null;
+  return `w${item.windowId}`;
+}
+
 async function applyReportItems(items) {
   const data = await api.storage.local.get([REPORT_KEY, 'uekPlayerWindows']);
   const rep = data[REPORT_KEY] || { sessions: {} };
   if (!rep.sessions) rep.sessions = {};
   const map = data.uekPlayerWindows || {};
+  const tabMap = await loadPlayerTabs();
 
   items.forEach((item) => {
-    if (item.windowId == null) return;
-    const key = `w${item.windowId}`;
+    const key = sessionKeyFor(item, tabMap);
+    if (!key) return;
     let s = rep.sessions[key];
     // Hiç raporlanmamış (UEK dışı) pencerenin kapanması rapora oturum açmasın
     if (!s && item.kind === 'close') return;
     if (!s) {
-      s = newSession(key, item, map);
+      s = newSession(key, item, map, tabMap);
       rep.sessions[key] = s;
     }
     s.lastSeen = Math.max(s.lastSeen, item.ts);
@@ -231,12 +241,13 @@ refreshAction();
 
 api.runtime.onInstalled.addListener((details) => {
   console.log('[egitimSavar-BG] Yüklendi:', details.reason);
+  serialized(() => prunePlayerTabs()).catch(() => {});
   ensureRefreshAlarm();
   refreshAction();
 });
 
 api.runtime.onStartup.addListener(() => {
-  serialized(() => prunePlayerWindows()).catch(() => {});
+  serialized(() => Promise.all([prunePlayerWindows(), prunePlayerTabs()])).catch(() => {});
   archiveSessionsAfterRestart().then(refreshAction);
   ensureRefreshAlarm();
 });
@@ -279,6 +290,95 @@ async function prunePlayerWindows() {
   if (changed) await writeMap(map, queue);
 }
 
+let playerTabsMem = null;
+
+async function loadPlayerTabs() {
+  if (playerTabsMem) return playerTabsMem;
+  const data = await api.storage.local.get('uekPlayerTabs');
+  playerTabsMem = data.uekPlayerTabs || {};
+  return playerTabsMem;
+}
+
+async function savePlayerTabs(tabs) {
+  playerTabsMem = tabs;
+  await api.storage.local.set({ uekPlayerTabs: tabs });
+}
+
+async function prunePlayerTabs() {
+  const tabs = await loadPlayerTabs();
+  let live = [];
+  try {
+    live = await api.tabs.query({});
+  } catch (_) {
+    return;
+  }
+  const ids = new Set(live.map((tab) => String(tab.id)));
+  let changed = false;
+  Object.keys(tabs).forEach((id) => {
+    if (!ids.has(id)) {
+      delete tabs[id];
+      changed = true;
+    }
+  });
+  if (changed) await savePlayerTabs(tabs);
+}
+
+async function openInTabs(message) {
+  const items = Array.isArray(message.items) ? message.items.filter((item) => item && item.url) : [];
+  if (!items.length) return { opened: 0, skipped: 0, failed: 0 };
+
+  await prunePlayerTabs();
+  await prunePlayerWindows();
+  const { map, queue } = await readMap();
+  const tabMap = await loadPlayerTabs();
+  const known = new Set([
+    ...Object.values(map).map((entry) => entry.url),
+    ...Object.values(tabMap).map((entry) => entry.url),
+  ]);
+  const fresh = items.filter((item) => !known.has(item.url));
+  const skipped = items.length - fresh.length;
+  if (!fresh.length) return { opened: 0, skipped, failed: 0 };
+
+  let opened = 0;
+  let failed = 0;
+  const openedUrls = new Set();
+  for (const item of fresh) {
+    try {
+      const tab = await api.tabs.create({ url: item.url, active: false });
+      if (!tab || tab.id == null) {
+        failed += 1;
+        continue;
+      }
+      tabMap[String(tab.id)] = {
+        url: item.url,
+        title: item.title || 'Eğitim',
+        windowId: tab.windowId,
+      };
+      await savePlayerTabs(tabMap);
+      try {
+        await api.tabs.update(tab.id, { autoDiscardable: false });
+      } catch (_) { /* Firefox bu alanı desteklemez */ }
+      reportEnqueue({
+        kind: 'open',
+        windowId: tab.windowId,
+        tabId: tab.id,
+        title: item.title || 'Eğitim',
+        url: item.url,
+        text: 'Sekme açıldı',
+      });
+      openedUrls.add(item.url);
+      opened += 1;
+    } catch (e) {
+      failed += 1;
+      console.warn('[egitimSavar-BG] Sekme açılamadı', item.url, e && e.message);
+    }
+  }
+  if (openedUrls.size) {
+    await writeMap(map, queue.filter((entry) => !openedUrls.has(entry.url)));
+  }
+  return { opened, skipped, failed };
+}
+
 async function createPlayerWindow(item, bounds) {
   const win = await api.windows.create({
     url: item.url,
@@ -317,10 +417,13 @@ async function openTrainings(message) {
   if (!items.length) return { opened: 0, queued: 0 };
 
   await prunePlayerWindows();
+  await prunePlayerTabs();
   const { map, queue } = await readMap();
+  const tabMap = await loadPlayerTabs();
   const known = new Set([
     ...Object.values(map).map((entry) => entry.url),
     ...queue.map((entry) => entry.url),
+    ...Object.values(tabMap).map((entry) => entry.url),
   ]);
   const fresh = items.filter((item) => !known.has(item.url));
   const skipped = items.length - fresh.length;
@@ -426,6 +529,23 @@ api.windows.onRemoved.addListener((windowId) => {
   serialized(() => handleRemoved(windowId)).catch(() => {});
 });
 
+api.tabs.onRemoved.addListener((tabId) => {
+  serialized(async () => {
+    const tabs = await loadPlayerTabs();
+    const info = tabs[String(tabId)];
+    if (!info) return;
+    delete tabs[String(tabId)];
+    await savePlayerTabs(tabs);
+    reportEnqueue({
+      kind: 'close',
+      sessionKey: `t${tabId}`,
+      windowId: info.windowId,
+      tabId,
+      text: 'Sekme kapandı',
+    });
+  }).catch(() => {});
+});
+
 /** Açık UEK sekmelerindeki tüm çerçevelerde izleyiciyi durdurur. */
 async function stopAll() {
   const manifest = api.runtime.getManifest();
@@ -481,6 +601,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         level: message.level,
         text: message.text,
         windowId: sender.tab.windowId,
+        tabId: sender.tab.id,
         frameId,
         tabTitle: sender.tab.title,
         url: message.url || url,
@@ -495,6 +616,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         kind: 'heartbeat',
         data: message.data,
         windowId: sender.tab.windowId,
+        tabId: sender.tab.id,
         frameId: sender.frameId || 0,
         tabTitle: sender.tab.title,
         url: message.data.url || sender.tab.url,
@@ -505,11 +627,21 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'uek-am-i-player-window') {
     const windowId = sender && sender.tab && sender.tab.windowId;
-    if (windowId == null) {
+    const tabId = sender && sender.tab && sender.tab.id;
+    if (windowId == null && tabId == null) {
       sendResponse({ player: false });
       return undefined;
     }
-    return respondAsync(sendResponse, () => readMap().then(({ map }) => ({ player: !!map[String(windowId)] })));
+    return respondAsync(sendResponse, async () => {
+      const { map } = await readMap();
+      const tabs = await loadPlayerTabs();
+      const player = !!(map[String(windowId)] || (tabId != null && tabs[String(tabId)]));
+      return { player };
+    });
+  }
+
+  if (message.type === 'uek-open-tabs') {
+    return respondAsync(sendResponse, () => serialized(() => openInTabs(message)));
   }
 
   if (message.type === 'uek-open-trainings') {

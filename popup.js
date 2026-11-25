@@ -151,6 +151,27 @@
     }
   }
 
+  async function startInTabs() {
+    const items = selectedItems();
+    if (!items.length) {
+      setStatus('Başlatılacak eğitim seçilmedi.');
+      return;
+    }
+    setStatus(`${items.length} eğitim ayrı sekmelerde açılıyor…`);
+    try {
+      const res = await api.runtime.sendMessage({ type: 'uek-open-tabs', items });
+      if (res && res.error) throw new Error(res.error);
+      const opened = (res && res.opened) || 0;
+      const skipped = (res && res.skipped) || 0;
+      const failed = (res && res.failed) || 0;
+      const skipNote = skipped ? `\n${skipped} eğitim zaten açık, atlandı.` : '';
+      const failNote = failed ? `\n${failed} sekme açılamadı.` : '';
+      setStatus(`${opened} sekme açıldı. Her eğitim kendi sekmesinde ayrı ilerliyor.${skipNote}${failNote}`);
+    } catch (e) {
+      setStatus('Sekmeler açılamadı. Eklentiyi about:debugging üzerinden yeniden yükleyin.');
+    }
+  }
+
   async function clearQueue() {
     await api.runtime.sendMessage({ type: 'uek-clear-queue' });
     setStatus('Sıra temizlendi. Açık pencereler kapanınca yeni eğitim açılmaz.');
@@ -238,6 +259,9 @@
   });
   document.getElementById('open').addEventListener('click', () => {
     openSelected().catch(() => setStatus('Dağıtım başarısız.'));
+  });
+  document.getElementById('start-tabs').addEventListener('click', () => {
+    startInTabs().catch(() => setStatus('Sekmeler açılamadı.'));
   });
   document.getElementById('clear-queue').addEventListener('click', () => {
     clearQueue().catch(() => setStatus('Sıra temizlenemedi.'));
