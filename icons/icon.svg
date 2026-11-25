@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="egitimSavar">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e40af"/>
+      <stop offset="1" stop-color="#0d9488"/>
+    </linearGradient>
+    <linearGradient id="play" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <!-- background -->
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <!-- shield: protects the learner's time -->
+  <path d="M64 15 L107 31 V62 C107 89 89 107 64 117 C39 107 21 89 21 62 V31 Z" fill="#ffffff"/>
+  <!-- thin inner outline -->
+  <path d="M64 24 L98 37 V62 C98 83 84 98 64 107 C44 98 30 83 30 62 V37 Z" fill="none" stroke="#1e40af" stroke-opacity=".18" stroke-width="3"/>
+  <!-- play: video / automatic progress -->
+  <path d="M55 45 L55 83 L89 64 Z" fill="url(#play)" stroke="url(#play)" stroke-width="7" stroke-linejoin="round"/>
+</svg>

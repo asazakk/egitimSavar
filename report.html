@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <title>egitimSavar — Rapor</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --card: #fff;
+      --text: #1c1f24;
+      --muted: #5f6672;
+      --line: #dfe2e8;
+      --good: #1a7f37;
+      --good-bg: #dcf5e3;
+      --warn: #8a5a00;
+      --warn-bg: #fff1cc;
+      --bad: #b42318;
+      --bad-bg: #fde4e1;
+      --info: #1f5fbf;
+      --info-bg: #e3edfd;
+      --off: #5f6672;
+      --off-bg: #eceef2;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --card: #1d2026;
+        --text: #e8eaee;
+        --muted: #9aa2af;
+        --line: #2e333c;
+        --good: #5fd382;
+        --good-bg: #173424;
+        --warn: #f2c35b;
+        --warn-bg: #3a2e12;
+        --bad: #ff8a80;
+        --bad-bg: #3d1b18;
+        --info: #8ab4ff;
+        --info-bg: #182640;
+        --off: #9aa2af;
+        --off-bg: #272b33;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 system-ui, "Segoe UI", sans-serif;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    h1 { font-size: 18px; margin: 0; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { border-radius: 8px; }
+    .sub { color: var(--muted); font-size: 12px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      font: inherit;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--text);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover { background: var(--off-bg); }
+    button.danger { color: var(--bad); border-color: var(--bad); }
+    main { padding: 16px 20px 40px; max-width: 1200px; margin: 0 auto; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .card .n { font-size: 24px; font-weight: 600; }
+    .card .l { color: var(--muted); font-size: 12px; }
+    .card.bad .n { color: var(--bad); }
+    .card.warn .n { color: var(--warn); }
+    .card.good .n { color: var(--good); }
+    nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+    nav.tabs button {
+      border: 0;
+      border-bottom: 3px solid transparent;
+      border-radius: 0;
+      background: none;
+      padding: 8px 14px;
+    }
+    nav.tabs button.active { border-bottom-color: var(--info); font-weight: 600; }
+    section.panel { display: none; }
+    section.panel.active { display: block; }
+    table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--bg); }
+    tr.row { cursor: pointer; }
+    tr.row:hover td { background: var(--off-bg); }
+    tr.row.sel td { background: var(--info-bg); }
+    td .title { font-weight: 600; }
+    td .meta { color: var(--muted); font-size: 12px; word-break: break-all; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .b-good { background: var(--good-bg); color: var(--good); }
+    .b-warn { background: var(--warn-bg); color: var(--warn); }
+    .b-bad { background: var(--bad-bg); color: var(--bad); }
+    .b-info { background: var(--info-bg); color: var(--info); }
+    .b-off { background: var(--off-bg); color: var(--off); }
+    .bar { height: 8px; background: var(--off-bg); border-radius: 4px; overflow: hidden; min-width: 90px; }
+    .bar > i { display: block; height: 100%; background: var(--info); }
+    .empty { color: var(--muted); padding: 18px; text-align: center; background: var(--card); border: 1px dashed var(--line); border-radius: 8px; }
+    h2 { font-size: 15px; margin: 18px 0 8px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
+    select, input[type="search"] {
+      font: inherit;
+      padding: 5px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--card);
+      color: var(--text);
+    }
+    ul.events { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 8px; max-height: 480px; overflow: auto; }
+    ul.events li { display: grid; grid-template-columns: 74px 64px 1fr; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    ul.events li:last-child { border-bottom: 0; }
+    ul.events .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+    ul.events .src { color: var(--muted); font-size: 12px; }
+    .finding { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+    .finding.done { opacity: .72; }
+    .finding .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .finding .head .t { font-weight: 600; flex: 1; min-width: 200px; }
+    .finding p { margin: 6px 0 0; }
+    .finding .lbl { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .finding label { white-space: nowrap; font-size: 12px; color: var(--muted); cursor: pointer; }
+    .progress-line { margin: 0 0 10px; color: var(--muted); }
+    #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 6px; display: none; z-index: 10; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="icons/icon-48.png" alt="" width="36" height="36">
+      <div>
+        <h1>egitimSavar — Rapor</h1>
+        <div class="sub" id="meta"></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="stop-all" type="button" class="danger">Tümünü durdur</button>
+      <button id="export" type="button">JSON dışa aktar</button>
+      <button id="clear" type="button">Raporu temizle</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="cards" id="cards"></div>
+
+    <nav class="tabs" role="tablist">
+      <button type="button" data-tab="live" class="active">Canlı takip</button>
+      <button type="button" data-tab="events">Olay günlüğü</button>
+      <button type="button" data-tab="review">Kod inceleme</button>
+    </nav>
+
+    <section class="panel active" id="panel-live">
+      <div id="sessions"></div>
+      <h2 id="detail-title" hidden></h2>
+      <div id="detail"></div>
+      <h2>Sırada bekleyen eğitimler</h2>
+      <div id="queue"></div>
+    </section>
+
+    <section class="panel" id="panel-events">
+      <div class="filters">
+        <label>Seviye
+          <select id="f-level">
+            <option value="">Tümü</option>
+            <option value="error">Hata</option>
+            <option value="warn">Uyarı</option>
+            <option value="ok">Önemli adım</option>
+            <option value="info">Bilgi</option>
+          </select>
+        </label>
+        <label>Pencere <select id="f-session"><option value="">Tümü</option></select></label>
+        <input id="f-text" type="search" placeholder="Metinde ara…">
+      </div>
+      <div id="events"></div>
+    </section>
+
+    <section class="panel" id="panel-review">
+      <div class="filters">
+        <label>Durum
+          <select id="r-status">
+            <option value="">Tümü</option>
+            <option value="fixed">Düzeltildi</option>
+            <option value="note">Bilgi / sınırlama</option>
+            <option value="open">Doğrulanmadı</option>
+          </select>
+        </label>
+        <label>Önem
+          <select id="r-sev">
+            <option value="">Tümü</option>
+            <option value="high">Yüksek</option>
+            <option value="medium">Orta</option>
+            <option value="low">Düşük</option>
+          </select>
+        </label>
+      </div>
+      <p class="progress-line" id="review-progress"></p>
+      <div id="findings"></div>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+  <script src="findings.js"></script>
+  <script src="report-core.js"></script>
+  <script src="report.js"></script>
+</body>
+</html>
