@@ -19,6 +19,10 @@
     postAdvanceLockMs: 500,
     // Video.js'te sonraki derse tıklayınca sayfa yenilenir; tekrar tıklamayı önle
     videoJsLockMs: 4000,
+    // İLERİ tıklamasından sonra slayt değişmediyse Ctrl+Alt+. için bekleme
+    nextKeyDelayMs: 1000,
+    // Düğme hiç yoksa kısayoldan önce hotspot denemelerine bırakılan süre
+    nextKeyNoButtonMs: 4000,
     postEndedWaitMs: 300,
     // Sıra Sizde özel handler açık
     siraSizdeCooldownMs: 1100,
@@ -80,6 +84,10 @@
     playOverlayLogged: false,
     tabIconKey: '',
     iconObserver: null,
+    shortcutArmedAt: 0,
+    shortcutLoggedAt: 0,
+    noNextStamp: '',
+    noNextSince: 0,
     messageListener: null,
     intervals: [],
     timeouts: [],
@@ -107,6 +115,12 @@
   // çerçeveler raporu kirletmesin diye yalnız üst çerçeve veya oynatıcı çerçeveleri bildirir.
   function shouldReport() {
     return window === window.top || state.mode !== 'parent';
+  }
+
+  function postGuard(kind, extra) {
+    try {
+      window.postMessage(Object.assign({ __egitimSavar: true, kind }, extra || {}), '*');
+    } catch (_) { /* sayfa yok */ }
   }
 
   function sendToBackground(msg) {
@@ -791,6 +805,12 @@
         ok('Sekme yeniden öne geldi.');
         resumeAfterVisibility();
       }
+    } else if (d.kind === 'next-key-sent') {
+      const now = Date.now();
+      if (now - state.shortcutLoggedAt > 15000) {
+        state.shortcutLoggedAt = now;
+        ok('Ctrl+Alt+. gönderildi — İLERİ kısayolu.');
+      }
     } else if (d.kind === 'pause-blocked') {
       visibility.pauseBlocked = d.count;
       // Log taşmasın: en fazla 15 sn'de bir özetle. Oynatma zaten sürüyor (pause yok sayıldı).
@@ -1010,7 +1030,8 @@
 
   /**
    * SCORM güvenli ilerleme: yalnız İLERİ gerçekten açıksa tek soft click.
-   * Kısayol / DOM zorlama / rastgele hotspot YOK (Anasayfa'ya düşürme).
+   * Tıklama slaytı değiştirmezse sayfa dünyasında Ctrl+Alt+. (İLERİ kısayolu) denenir.
+   * Rastgele kısayol yok; ana sayfaya düşüren tuşlar gönderilmez.
    */
   function advanceNext() {
     if (isSlideLocked()) return false;
@@ -1036,8 +1057,20 @@
     if (clicked) {
       state.nextClicks += 1;
       noteActivity();
+      // Slayt değiştiyse sayfa kısayolu basmaz (çift geçiş olmasın).
+      postGuard('next-key-if-stuck', { allowUnknown: false, delay: CONFIG.nextKeyDelayMs });
     }
     return clicked;
+  }
+
+  /** İLERİ düğmesi bulunamayan oynatıcıda, medya bitmişken Ctrl+Alt+. dener. */
+  function armNextShortcut(reason) {
+    const now = Date.now();
+    if (now - state.shortcutArmedAt < CONFIG.nextKeyDelayMs + 400) return false;
+    state.shortcutArmedAt = now;
+    state.lastAdvanceAt = now;
+    postGuard('next-key-if-stuck', { allowUnknown: true, delay: 300, reason: reason || '' });
+    return true;
   }
 
   function isNavChrome(el) {
@@ -1617,6 +1650,19 @@
         applyPlayback(player, media);
         tryAdvanceFromMedia(player, media);
       }
+      // Düğme bulunamayan oynatıcı: medya bitmişken İLERİ kısayolu (Ctrl+Alt+.)
+      if (!next && !mediaStillPlaying(player, media)) {
+        const stamp = String(getSlideIndex() ?? '');
+        if (state.noNextStamp !== stamp || !state.noNextSince) {
+          state.noNextStamp = stamp;
+          state.noNextSince = Date.now();
+        } else if (Date.now() - state.noNextSince >= CONFIG.nextKeyNoButtonMs) {
+          armNextShortcut('İLERİ düğmesi yok');
+        }
+      } else if (next) {
+        state.noNextStamp = '';
+        state.noNextSince = 0;
+      }
       if ((!media && !player) || (isPaused(player, media) && !isEnded(player, media))) {
         clickPlayOverlay();
       }
@@ -1873,6 +1919,7 @@
 
   function stop(opts) {
     const keepListener = !!(opts && opts.keepListener);
+    postGuard('next-key-cancel');
     if (state.stopped) {
       if (!keepListener) {
         if (state.messageListener) {

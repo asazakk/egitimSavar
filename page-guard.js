@@ -510,6 +510,89 @@
   } catch (_) { /* ignore */ }
 
   // İlk durumu bildir (sayfa arka planda açılmış olabilir) ve hazır olduğunu söyle
+  // İLERİ kısayolu Ctrl+Alt+. — yalnız içerik betiği isterse, slayt değişmediyse basılır.
+  let nextKeyToken = 0;
+  let nextKeyPending = false;
+
+  function storylineIndex() {
+    try {
+      if (typeof window.GetPlayer === 'function') {
+        const player = window.GetPlayer();
+        if (player && typeof player.GetCurrentSlideIndex === 'function') {
+          const idx = player.GetCurrentSlideIndex();
+          if (idx != null && idx !== '') return 'p:' + idx;
+        }
+      }
+    } catch (_) { /* Storyline API yok */ }
+    const root = document.querySelector('#slide');
+    if (root) {
+      const id = root.getAttribute('data-index') || root.getAttribute('data-slide-id');
+      if (id) return 'd:' + id;
+    }
+    return null;
+  }
+
+  function dispatchNextShortcut() {
+    const target = document.body || document.documentElement;
+    if (!target) return;
+    const make = (type) => {
+      let ev;
+      try {
+        ev = new KeyboardEvent(type, {
+          key: '.',
+          code: 'Period',
+          ctrlKey: true,
+          altKey: true,
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          view: window,
+        });
+      } catch (_) {
+        return null;
+      }
+      try {
+        Object.defineProperty(ev, 'keyCode', { get: () => 190 });
+        Object.defineProperty(ev, 'which', { get: () => 190 });
+      } catch (_) { /* keyCode salt okunur */ }
+      return ev;
+    };
+    ['keydown', 'keyup'].forEach((type) => {
+      const ev = make(type);
+      if (!ev) return;
+      try {
+        target.dispatchEvent(ev);
+      } catch (_) { /* ignore */ }
+    });
+    notify({ kind: 'next-key-sent' });
+  }
+
+  window.addEventListener('message', (ev) => {
+    if (ev.source !== window || !ev.data || ev.data.__egitimSavar !== true) return;
+    const data = ev.data;
+    if (data.kind === 'next-key-cancel') {
+      nextKeyToken += 1;
+      nextKeyPending = false;
+      return;
+    }
+    if (data.kind !== 'next-key-if-stuck') return;
+    // Yeni tıklama bekleyen denemeyi iptal etmesin; aksi halde kısayol hiç basılmaz.
+    if (nextKeyPending) return;
+    const before = storylineIndex();
+    const allowUnknown = !!data.allowUnknown;
+    const delay = Math.max(200, Math.min(3000, Number(data.delay) || 1000));
+    nextKeyPending = true;
+    const token = nextKeyToken;
+    nativeSetTimeout(() => {
+      nextKeyPending = false;
+      if (token !== nextKeyToken) return;
+      const after = storylineIndex();
+      if (before != null && after != null && String(before) !== String(after)) return;
+      if (before == null && after == null && !allowUnknown) return;
+      dispatchNextShortcut();
+    }, delay);
+  });
+
   notify({ kind: 'ready' });
   report(realHidden());
   applyAllMedia();

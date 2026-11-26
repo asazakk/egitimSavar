@@ -77,6 +77,14 @@ npx web-ext build --source-dir .
 ## Sürüm notları
 
 <details>
+<summary><b>1.7.8</b> · İLERİ kısayolu Ctrl+Alt+.</summary>
+
+- İLERİ tıklaması slaytı değiştirmezse, oynatıcının kendi kısayolu Ctrl+Alt+. sayfa dünyasında bir kez gönderilir. Tıklama işe yaradıysa ikinci kez basılmaz
+- İLERİ düğmesi hiç bulunamayan ve medyası bitmiş slaytta, birkaç saniye sonra aynı kısayol denenir
+
+</details>
+
+<details>
 <summary><b>1.7.7</b> · sekme simgesi duruma göre değişir</summary>
 
 - Açık eğitim sekmelerinin simgesi duruma göre değişir: oynatılıyor, çalışıyor, duraklatıldı, sınav, takıldı, bağlantı yok, durduruldu
