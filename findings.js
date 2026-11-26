@@ -214,6 +214,16 @@ globalThis.UEK_FINDINGS = [
     fix: 'Görünen yazısı "Devam Et" olan düğmeye basılıyor. Düğme yoksa tek oynatıcı adresi yine açılıyor. Oynatıcı DOM\'a gelince mod yenilenip oynat ve büyük oynat düğmesi deneniyor.',
   },
   {
+    id: 'F22',
+    severity: 'high',
+    status: 'fixed',
+    file: 'page-guard.js / content.js',
+    title: 'Videoya geçiliyordu ama oynatma elle başlatılıyordu',
+    problem:
+      'Sessiz otomatik oynatma için play() çağrısı yalnız sekme gizliyken yapılıyordu. Öndeki sekmede video büyük oynat düğmesinde kalıyordu. Ses açılınca da tarayıcı jest olmadan oynatmayı reddediyordu.',
+    fix: 'Her video sürekli sessiz tutuluyor. Sekme önde ya da arkada olsun, video.play() ve Video.js oynat düğmesi sayfa dünyasından tekrarlanıyor.',
+  },
+  {
     id: 'N01',
     severity: 'low',
     status: 'note',

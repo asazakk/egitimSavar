@@ -7,8 +7,8 @@
  *   1) document.hidden / visibilityState / hasFocus() sayfaya her zaman "görünür, odakta" döner.
  *   2) visibilitychange ve pencere blur/focusout olayları sayfa dinleyicilerine ulaşmadan kesilir.
  *   3) Sekme GERÇEKTEN arka plandayken gelen pause() çağrıları yok sayılır.
- *      Sessiz video arka planda tarayıcı tarafından durdurulur; gizliyken ses kısık ama
- *      kapalı olmayan (muted=false, volume>0) tutulur ki oynatma askıya alınmasın.
+ *      Video her zaman sessiz başlar; aksi halde tarayıcı jest olmadan play() çağrısını reddeder.
+ *      Büyük oynat düğmesi ve video.play() sekme önde olmasa da tekrarlanır.
  *   4) Arka planda tarayıcı requestAnimationFrame'i tamamen durdurur (Storyline zaman çizelgesi
  *      buna bağlı). Sekme gizliyken bekleyen kareler bir zamanlayıcıyla çalıştırılır.
  *   5) Chrome'un yoğun zamanlayıcı kısıtlamasına (5 dk sonra dakikada 1) karşı bir Web Lock tutulur.
@@ -83,42 +83,23 @@
   });
 
   // 3) arka plandayken sayfanın duraklatmasını yok say.
-  //    Chrome/Firefox sessiz (muted veya volume 0) videoyu gizli sekmede kendisi durdurur;
-  //    JS pause() override'ı bunu tek başına engellemez. Gizliyken medya duyulur ama kısık kalır.
-  //    Yeni video varsayılan volume=1 ile açılır ve sayfa (sahte "görünür" gördüğü için) sesi
-  //    sürekli 1'e çeker. Yalnızca "çok kısık ise yükselt" yetmez; tavan da zorlanır.
-  const KEEPALIVE_VOLUME = 0.02;
+  //    Sesli play() kullanıcı jesti olmadan reddedilir; bu yüzden her video sessiz başlar.
+  //    Büyük oynat düğmesi ve Video.js de sayfa dünyasından tetiklenir, sekme önde olsun olmasın.
   let blockedCount = 0;
   const origPause = HTMLMediaElement.prototype.pause;
   const origPlay = HTMLMediaElement.prototype.play;
-  // Gizli sekmede sesli play() kullanıcı jesti olmadan reddedilir. Video bir kez
-  // ilerlediyse kısık sese geçilir; başlamadan önce sessiz kalır ki play() kabul edilsin.
-  const audibleArmed = new WeakSet();
 
   function isMediaEl(el) {
     return !!el && (el.tagName === 'VIDEO' || el.tagName === 'AUDIO');
   }
 
-  function armIfPlaying(el) {
-    if (!isMediaEl(el) || el.ended || el.paused) return;
-    if ((el.currentTime || 0) > 0.2) audibleArmed.add(el);
-  }
-
-  function wantsKeepAlive(el) {
-    return realHidden() && isMediaEl(el) && !el.ended && audibleArmed.has(el);
-  }
-
-  /** Görünür veya henüz başlamamış: sessiz. Gizli ve ilerlemiş: tavan 0.02. */
   function applyMediaPolicy(el) {
     if (!isMediaEl(el) || el.ended) return;
-    armIfPlaying(el);
-    const keep = wantsKeepAlive(el);
     try {
-      const wantMuted = !keep;
-      if (el.muted !== wantMuted) el.muted = wantMuted;
-      if (keep) el.removeAttribute('muted');
-      const wantVol = keep ? KEEPALIVE_VOLUME : 0;
-      if (el.volume !== wantVol) el.volume = wantVol;
+      if (!el.muted) el.muted = true;
+      el.setAttribute('muted', '');
+      el.setAttribute('playsinline', '');
+      if (el.volume !== 0) el.volume = 0;
     } catch (_) { /* ignore */ }
   }
 
@@ -128,20 +109,28 @@
 
   function holdPlaying(el) {
     if (!isMediaEl(el) || el.ended) return;
-    const audible = wantsKeepAlive(el);
     applyMediaPolicy(el);
     if (!el.paused) return;
     try {
       const p = origPlay.call(el);
-      if (!p || typeof p.then !== 'function') return;
-      p.then(() => armIfPlaying(el)).catch(() => {
-        if (!audible) return;
-        audibleArmed.delete(el);
-        applyMediaPolicy(el);
-        const retry = origPlay.call(el);
-        if (retry && typeof retry.catch === 'function') retry.catch(() => {});
-      });
+      if (p && typeof p.catch === 'function') p.catch(() => {});
     } catch (_) { /* ignore */ }
+  }
+
+  function clickStartControls() {
+    let nodes = [];
+    try {
+      nodes = document.querySelectorAll('.vjs-big-play-button, .vjs-play-control.vjs-paused');
+    } catch (_) {
+      return;
+    }
+    nodes.forEach((el) => {
+      try {
+        const r = el.getBoundingClientRect();
+        if (r.width < 8 || r.height < 8) return;
+        el.click();
+      } catch (_) { /* ignore */ }
+    });
   }
 
   function eachLightMedia(fn) {
@@ -152,17 +141,10 @@
 
   /** Storyline / Video.js sesi HTML volume'dan ayrı durabiliyor; sayfa dünyasında kısılır. */
   function applyPlayerVolumes() {
-    let keep = false;
-    if (realHidden()) {
-      eachLightMedia((el) => {
-        if (wantsKeepAlive(el)) keep = true;
-      });
-    }
-    const vol = keep ? KEEPALIVE_VOLUME : 0;
     try {
       if (typeof GetPlayer === 'function') {
         const sp = GetPlayer();
-        if (sp && typeof sp.SetVolume === 'function') sp.SetVolume(keep ? 2 : 0);
+        if (sp && typeof sp.SetVolume === 'function') sp.SetVolume(0);
       }
     } catch (_) { /* ignore */ }
     try {
@@ -172,8 +154,12 @@
           const player = all[key];
           if (!player) return;
           try {
-            if (typeof player.muted === 'function') player.muted(!keep);
-            if (typeof player.volume === 'function') player.volume(vol);
+            if (typeof player.muted === 'function') player.muted(true);
+            if (typeof player.volume === 'function') player.volume(0);
+            if (typeof player.paused === 'function' && player.paused() && typeof player.play === 'function') {
+              const pending = player.play();
+              if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+            }
           } catch (_) { /* ignore */ }
         });
       }
@@ -181,10 +167,8 @@
   }
 
   function applyAllMedia() {
-    eachLightMedia((el) => {
-      if (realHidden()) holdPlaying(el);
-      else applyMediaPolicy(el);
-    });
+    eachLightMedia(holdPlaying);
+    clickStartControls();
     applyPlayerVolumes();
   }
 
@@ -206,8 +190,7 @@
             mutedDesc.set.call(this, v);
             return;
           }
-          // Başlamadan sessiz (play kabul edilsin). İlerlediyse ve sekme gizliyse kısık ses.
-          mutedDesc.set.call(this, wantsKeepAlive(this) ? false : true);
+          mutedDesc.set.call(this, true);
         },
       });
     }
@@ -221,7 +204,7 @@
             volumeDesc.set.call(this, v);
             return;
           }
-          volumeDesc.set.call(this, wantsKeepAlive(this) ? KEEPALIVE_VOLUME : 0);
+          volumeDesc.set.call(this, this.ended ? v : 0);
         },
       });
     }
@@ -229,13 +212,7 @@
 
   document.addEventListener('play', (ev) => {
     if (!isMediaEl(ev.target)) return;
-    if (realHidden()) holdPlaying(ev.target);
-    else applyMediaPolicy(ev.target);
-    applyPlayerVolumes();
-  }, true);
-  document.addEventListener('timeupdate', (ev) => {
-    if (!isMediaEl(ev.target)) return;
-    if (!audibleArmed.has(ev.target)) armIfPlaying(ev.target);
+    applyMediaPolicy(ev.target);
   }, true);
 
   HTMLMediaElement.prototype.pause = function egitimSavarPause(...args) {
@@ -465,11 +442,11 @@
         rec.addedNodes.forEach((node) => {
           if (!node || node.nodeType !== 1) return;
           if (isMediaEl(node)) {
-            applyMediaPolicy(node);
+            holdPlaying(node);
             return;
           }
           if (typeof node.querySelectorAll === 'function') {
-            node.querySelectorAll('video, audio').forEach(applyMediaPolicy);
+            node.querySelectorAll('video, audio').forEach(holdPlaying);
           }
         });
       });

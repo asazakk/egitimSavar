@@ -77,6 +77,7 @@
     finishPollAt: 0,
     managedTab: false,
     lastStartClickAt: 0,
+    playOverlayLogged: false,
     messageListener: null,
     intervals: [],
     timeouts: [],
@@ -328,55 +329,13 @@
     return false;
   }
 
-  // Gizli sekmede tarayıcı sessiz videoyu durdurur. Kısık ama kapalı olmayan ses oynatmayı ayakta tutar.
-  const KEEPALIVE_VOLUME = 0.02;
-
   /** İzole dünyada document.hidden gerçektir; sayfa dünyasındaki sahte "görünür" buraya sızmaz. */
   function tabHidden() {
     return document.hidden || visibility.hidden;
   }
 
-  function mediaRolling(el) {
-    return !!(el && !el.ended && !el.paused && (el.currentTime || 0) > 0.2);
-  }
-
-  function keepAliveElement(el) {
-    try {
-      // Henüz başlamamış videoyu gizli sekmede sesli açmak tarayıcının play() çağrısını reddeder.
-      // Önce sessiz başlar; ilerledikten sonra kısık sese geçilir.
-      if (!mediaRolling(el)) {
-        el.muted = true;
-        el.volume = 0;
-        el.setAttribute('muted', 'true');
-        return;
-      }
-      el.muted = false;
-      el.removeAttribute('muted');
-      el.volume = KEEPALIVE_VOLUME;
-    } catch (_) { /* ignore */ }
-  }
-
-  /** Kilitten bağımsız: tüm HTML medya + Video.js + Storyline sesi */
+  /** Kilitten bağımsız: tüm HTML medya sessiz. Sesli açılış tarayıcıda play() reddine yol açar. */
   function muteAll() {
-    if (tabHidden()) {
-      queryDeepAll('audio, video').forEach((el) => {
-        if (!el.ended) keepAliveElement(el);
-      });
-      try {
-        const player = findVideoJsPlayer();
-        if (player) {
-          if (typeof player.muted === 'function') player.muted(false);
-          if (typeof player.volume === 'function') player.volume(KEEPALIVE_VOLUME);
-        }
-      } catch (_) { /* ignore */ }
-      try {
-        if (typeof GetPlayer === 'function') {
-          const sp = GetPlayer();
-          if (sp && typeof sp.SetVolume === 'function') sp.SetVolume(2);
-        }
-      } catch (_) { /* ignore */ }
-      return;
-    }
     queryDeepAll('audio, video').forEach((el) => {
       try {
         el.muted = true;
@@ -406,10 +365,6 @@
       const t = ev.target;
       if (!t || (t.tagName !== 'AUDIO' && t.tagName !== 'VIDEO')) return;
       try {
-        if (tabHidden()) {
-          keepAliveElement(t);
-          return;
-        }
         t.muted = true;
         t.volume = 0;
       } catch (_) { /* ignore */ }
@@ -447,13 +402,6 @@
     if (!player && !media) return;
     // Slayt geçişi sırasında play/rate spam Storyline'ı düşürüyor
     if (Date.now() < state.slideLockUntil) return;
-    if (tabHidden()) {
-      if (media) keepAliveElement(media);
-      const rate = currentTargetRate();
-      setRate(player, media, rate);
-      if (!isEnded(player, media) && isPaused(player, media)) playSafe(player, media);
-      return;
-    }
     setMuted(player, media, true);
     const rate = currentTargetRate();
     setRate(player, media, rate);
@@ -1541,7 +1489,10 @@
   function clickPlayOverlay() {
     const el = queryDeep('.vjs-big-play-button, .vjs-play-control.vjs-paused, .play-button');
     if (!el || !visible(el) || !looksEnabled(el)) return false;
-    ok('Oynat düğmesine basıldı.');
+    if (!state.playOverlayLogged) {
+      state.playOverlayLogged = true;
+      ok('Oynat düğmesine basıldı.');
+    }
     return softClick(el);
   }
 
@@ -1655,6 +1606,9 @@
       if (player || media) {
         applyPlayback(player, media);
         tryAdvanceFromMedia(player, media);
+      }
+      if ((!media && !player) || (isPaused(player, media) && !isEnded(player, media))) {
+        clickPlayOverlay();
       }
       return;
     }
