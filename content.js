@@ -1487,13 +1487,19 @@
   }
 
   function clickPlayOverlay() {
-    const el = queryDeep('.vjs-big-play-button, .vjs-play-control.vjs-paused, .play-button');
-    if (!el || !visible(el) || !looksEnabled(el)) return false;
+    const el = queryDeep(
+      '[data-dv_ref="playIcon"], svg.play-icon, .play-icon, .vjs-big-play-button, .vjs-play-control.vjs-paused, .play-button'
+    );
+    if (!el || !visible(el)) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 36 || rect.height < 36) return false;
+    const host = (el.closest && el.closest('button, a, [role="button"], [onclick]')) || el.parentElement || el;
     if (!state.playOverlayLogged) {
       state.playOverlayLogged = true;
       ok('Oynat düğmesine basıldı.');
     }
-    return softClick(el);
+    softClick(el);
+    return softClick(host);
   }
 
   /** Oynatıcı sayfa açıldıktan sonra DOM'a geç geliyor; parent modunda kalırsa video hiç başlamaz. */

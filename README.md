@@ -77,6 +77,13 @@ npx web-ext build --source-dir .
 ## Sürüm notları
 
 <details>
+<summary><b>1.7.6</b> · kapaktaki oynat düğmesi</summary>
+
+- Açılıştaki beyaz daire Video.js değil; `svg.play-icon` (`data-dv_ref="playIcon"`). Bu ikona ve üzerindeki düğmeye basılıyor, video sessiz başlıyor
+
+</details>
+
+<details>
 <summary><b>1.7.2</b> · açılan videolar tam sesle çalmıyor</summary>
 
 - Yeni açılan video varsayılan sesle (1) başlıyor ve sayfa sesi tekrar yükseltiyordu. Artık sayfa dünyasında ses zorlanır: öndeki sekmede 0, arkadaki sekmede en fazla 0.02

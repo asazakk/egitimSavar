@@ -224,6 +224,16 @@ globalThis.UEK_FINDINGS = [
     fix: 'Her video sürekli sessiz tutuluyor. Sekme önde ya da arkada olsun, video.play() ve Video.js oynat düğmesi sayfa dünyasından tekrarlanıyor.',
   },
   {
+    id: 'F23',
+    severity: 'high',
+    status: 'fixed',
+    file: 'page-guard.js / content.js',
+    title: 'Kapak ekranındaki play-icon tıklanmıyordu',
+    problem:
+      'Açılıştaki beyaz oynat dairesi Video.js düğmesi değil. svg.play-icon ve data-dv_ref="playIcon". Seçici bunu görmediği için video kapakta kalıyordu.',
+    fix: 'Bu ikon, üzerindeki düğme ve tıklanan noktanın altındaki öğe sayfa dünyasından tetikleniyor. Video yine sessiz başlatılıyor.',
+  },
+  {
     id: 'N01',
     severity: 'low',
     status: 'note',

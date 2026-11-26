@@ -117,18 +117,66 @@
     } catch (_) { /* ignore */ }
   }
 
+  function press(el) {
+    if (!el || el === document.body || el === document.documentElement) return;
+    let rect = { left: 0, top: 0, width: 0, height: 0 };
+    try {
+      rect = el.getBoundingClientRect();
+    } catch (_) { /* ignore */ }
+    const opts = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    };
+    try {
+      if (window.PointerEvent) {
+        el.dispatchEvent(new PointerEvent('pointerdown', opts));
+        el.dispatchEvent(new PointerEvent('pointerup', opts));
+      }
+      el.dispatchEvent(new MouseEvent('mousedown', opts));
+      el.dispatchEvent(new MouseEvent('mouseup', opts));
+      el.dispatchEvent(new MouseEvent('click', opts));
+      if (typeof el.click === 'function') el.click();
+    } catch (_) { /* ignore */ }
+  }
+
+  /** Ortadaki svg.play-icon / data-dv_ref="playIcon" ve Video.js oynat düğmesi. */
   function clickStartControls() {
+    const sel = [
+      '[data-dv_ref="playIcon"]',
+      'svg.play-icon',
+      '.play-icon',
+      '.vjs-big-play-button',
+      '.vjs-play-control.vjs-paused',
+    ].join(', ');
     let nodes = [];
     try {
-      nodes = document.querySelectorAll('.vjs-big-play-button, .vjs-play-control.vjs-paused');
+      nodes = document.querySelectorAll(sel);
     } catch (_) {
       return;
     }
     nodes.forEach((el) => {
+      let rect;
       try {
-        const r = el.getBoundingClientRect();
-        if (r.width < 8 || r.height < 8) return;
-        el.click();
+        rect = el.getBoundingClientRect();
+      } catch (_) {
+        return;
+      }
+      // Kapak ekranındaki daire büyüktür. Kontrol çubuğundaki küçük ikonlar atlanır.
+      if (rect.width < 36 || rect.height < 36) return;
+      const host = (el.closest && el.closest('button, a, [role="button"], [onclick]')) || el.parentElement || el;
+      press(host);
+      press(el);
+      let node = el.parentElement;
+      for (let i = 0; node && node !== document.body && i < 4; i += 1) {
+        press(node);
+        node = node.parentElement;
+      }
+      try {
+        const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        if (top) press(top);
       } catch (_) { /* ignore */ }
     });
   }
