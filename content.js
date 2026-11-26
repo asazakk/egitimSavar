@@ -338,7 +338,8 @@
     try {
       el.muted = false;
       el.removeAttribute('muted');
-      if ((el.volume || 0) < KEEPALIVE_VOLUME) el.volume = KEEPALIVE_VOLUME;
+      // Varsayılan ses 1'dir. Yalnızca alttan yükseltmek tam sesi yerinde bırakıyordu.
+      el.volume = KEEPALIVE_VOLUME;
     } catch (_) { /* ignore */ }
   }
 

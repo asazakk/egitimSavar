@@ -184,6 +184,16 @@ globalThis.UEK_FINDINGS = [
     fix: 'Sekme gizliyken video susturulmuyor; ses kısık (0.02) bırakılıyor, tarayıcının kendi pause\'u hemen play() ile geri alınıyor. Kare pompası kısılan setInterval yerine worker saatinde. Bitmiş eğitim (kabukta "tekrar katıl" / tamamlandı yazısı, tüm üniteler işaretli ya da video bitip sıradaki ders yok) birkaç saniye doğrulanınca eklentinin açtığı sekme kapanıyor. Katalog taramasında bitmiş görünenler işaretsiz gelir.',
   },
   {
+    id: 'F19',
+    severity: 'high',
+    status: 'fixed',
+    file: 'page-guard.js / content.js',
+    title: 'Açılan videolar tam sesle çalıyordu',
+    problem:
+      'F18 sesi yalnızca 0.02\'nin altındaysa yükseltiyordu. Yeni video varsayılan olarak volume 1 ile açılıyor; sayfa da sahte "görünür" durumda olduğu için sesi tekrar 1 yapıyordu. Kısma hiç uygulanmıyordu. Storyline SetVolume ve Video.js çağrıları izole içerik betiğinden sayfa dünyasına ulaşmıyordu.',
+    fix: 'Sayfa dünyasında volume ve muted atamaları zorlanır: öndeki sekmede ses 0, gizli sekmede tavan 0.02. Oynatma başında ve düzenli taramada mevcut videolara da uygulanır. GetPlayer().SetVolume ve Video.js aynı politikayla sayfa dünyasından kısılır.',
+  },
+  {
     id: 'N01',
     severity: 'low',
     status: 'note',

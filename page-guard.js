@@ -65,6 +65,7 @@
   }
   window.addEventListener('visibilitychange', () => {
     report(realHidden());
+    applyAllMedia();
   }, true);
   // Bu dinleyici sayfanınkilerden önce kaydedildiği için (document_start) önce çalışır;
   // aşağıdaki kesme, sayfanın document/window dinleyicilerine olayı ulaştırmaz.
@@ -84,17 +85,32 @@
   // 3) arka plandayken sayfanın duraklatmasını yok say.
   //    Chrome/Firefox sessiz (muted veya volume 0) videoyu gizli sekmede kendisi durdurur;
   //    JS pause() override'ı bunu tek başına engellemez. Gizliyken medya duyulur ama kısık kalır.
+  //    Yeni video varsayılan volume=1 ile açılır ve sayfa (sahte "görünür" gördüğü için) sesi
+  //    sürekli 1'e çeker. Yalnızca "çok kısık ise yükselt" yetmez; tavan da zorlanır.
   const KEEPALIVE_VOLUME = 0.02;
   let blockedCount = 0;
   const origPause = HTMLMediaElement.prototype.pause;
   const origPlay = HTMLMediaElement.prototype.play;
 
-  function forceAudible(el) {
-    if (!el || el.ended) return;
+  function isMediaEl(el) {
+    return !!el && (el.tagName === 'VIDEO' || el.tagName === 'AUDIO');
+  }
+
+  /** Görünür sekme: tam sessiz. Gizli sekme: oynatma düşmesin diye 0.02, üstü yok. */
+  function applyMediaPolicy(el) {
+    if (!isMediaEl(el) || el.ended) return;
+    const hidden = realHidden();
     try {
-      if (el.muted) el.muted = false;
-      if ((el.volume || 0) < KEEPALIVE_VOLUME) el.volume = KEEPALIVE_VOLUME;
+      const wantMuted = !hidden;
+      if (el.muted !== wantMuted) el.muted = wantMuted;
+      if (hidden) el.removeAttribute('muted');
+      const wantVol = hidden ? KEEPALIVE_VOLUME : 0;
+      if (el.volume !== wantVol) el.volume = wantVol;
     } catch (_) { /* ignore */ }
+  }
+
+  function forceAudible(el) {
+    applyMediaPolicy(el);
   }
 
   function holdPlaying(el) {
@@ -106,11 +122,48 @@
     } catch (_) { /* ignore */ }
   }
 
+  function eachLightMedia(fn) {
+    try {
+      document.querySelectorAll('video, audio').forEach(fn);
+    } catch (_) { /* ignore */ }
+  }
+
+  /** Storyline / Video.js sesi HTML volume'dan ayrı durabiliyor; sayfa dünyasında kısılır. */
+  function applyPlayerVolumes() {
+    const hidden = realHidden();
+    const vol = hidden ? KEEPALIVE_VOLUME : 0;
+    try {
+      if (typeof GetPlayer === 'function') {
+        const sp = GetPlayer();
+        if (sp && typeof sp.SetVolume === 'function') sp.SetVolume(hidden ? 2 : 0);
+      }
+    } catch (_) { /* ignore */ }
+    try {
+      if (typeof videojs !== 'undefined' && typeof videojs.getPlayers === 'function') {
+        const all = videojs.getPlayers() || {};
+        Object.keys(all).forEach((key) => {
+          const player = all[key];
+          if (!player) return;
+          try {
+            if (typeof player.muted === 'function') player.muted(!hidden);
+            if (typeof player.volume === 'function') player.volume(vol);
+          } catch (_) { /* ignore */ }
+        });
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  function applyAllMedia() {
+    eachLightMedia((el) => {
+      if (realHidden()) holdPlaying(el);
+      else applyMediaPolicy(el);
+    });
+    applyPlayerVolumes();
+  }
+
   function keepBackgroundMedia() {
     if (!realHidden()) return;
-    try {
-      document.querySelectorAll('video, audio').forEach(holdPlaying);
-    } catch (_) { /* ignore */ }
+    applyAllMedia();
   }
 
   try {
@@ -122,8 +175,12 @@
         enumerable: mutedDesc.enumerable,
         get() { return mutedDesc.get.call(this); },
         set(v) {
-          if (realHidden() && !this.ended && v) return;
-          mutedDesc.set.call(this, v);
+          if (this.ended) {
+            mutedDesc.set.call(this, v);
+            return;
+          }
+          // Gizli: sessiz video tarayıcıda durur. Görünür: sayfa sesi geri açamasın.
+          mutedDesc.set.call(this, realHidden() ? false : true);
         },
       });
     }
@@ -133,12 +190,22 @@
         enumerable: volumeDesc.enumerable,
         get() { return volumeDesc.get.call(this); },
         set(v) {
-          const next = realHidden() && !this.ended && Number(v) < KEEPALIVE_VOLUME ? KEEPALIVE_VOLUME : v;
-          volumeDesc.set.call(this, next);
+          if (this.ended) {
+            volumeDesc.set.call(this, v);
+            return;
+          }
+          volumeDesc.set.call(this, realHidden() ? KEEPALIVE_VOLUME : 0);
         },
       });
     }
   } catch (_) { /* ignore */ }
+
+  document.addEventListener('play', (ev) => {
+    if (!isMediaEl(ev.target)) return;
+    if (realHidden()) holdPlaying(ev.target);
+    else applyMediaPolicy(ev.target);
+    applyPlayerVolumes();
+  }, true);
 
   HTMLMediaElement.prototype.pause = function egitimSavarPause(...args) {
     if (realHidden() && !this.ended) {
@@ -357,7 +424,30 @@
     }
   } catch (_) { /* ignore */ }
 
+  // Görünür sekmede de yeni açılan videoyu yakala. Varsayılan ses 1'dir ve sayfa
+  // volume atamadan oynatırsa setter devreye girmez; tarama ve play olayı kapatır.
+  nativeSetInterval(applyAllMedia, 400);
+  try {
+    const watchRoot = document.documentElement || document;
+    const mo = new MutationObserver((records) => {
+      records.forEach((rec) => {
+        rec.addedNodes.forEach((node) => {
+          if (!node || node.nodeType !== 1) return;
+          if (isMediaEl(node)) {
+            applyMediaPolicy(node);
+            return;
+          }
+          if (typeof node.querySelectorAll === 'function') {
+            node.querySelectorAll('video, audio').forEach(applyMediaPolicy);
+          }
+        });
+      });
+    });
+    mo.observe(watchRoot, { childList: true, subtree: true });
+  } catch (_) { /* ignore */ }
+
   // İlk durumu bildir (sayfa arka planda açılmış olabilir) ve hazır olduğunu söyle
   notify({ kind: 'ready' });
   report(realHidden());
+  applyAllMedia();
 })();
