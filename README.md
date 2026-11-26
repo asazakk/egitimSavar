@@ -80,6 +80,8 @@ npx web-ext build --source-dir .
 <summary><b>1.7.6</b> · kapaktaki oynat düğmesi</summary>
 
 - Açılıştaki beyaz daire Video.js değil; `svg.play-icon` (`data-dv_ref="playIcon"`). Bu ikona ve üzerindeki düğmeye basılıyor, video sessiz başlıyor
+- `clickPlayOverlay` artık hem ikonun hem de üst düğmenin tıklama sonucunu birlikte değerlendiriyor (yalnız host sonucunu döndürmüyor); ikon ile host aynı öğeyse ikinci kez tıklanmıyor
+- `page-guard.js` içindeki `press()`, `getBoundingClientRect()` başarısız olursa (0,0) koordinatlı sahte fare/işaretçi olayları yollamak yerine yalnızca `el.click()` çağırıyor
 
 </details>
 

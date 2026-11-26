@@ -1498,8 +1498,10 @@
       state.playOverlayLogged = true;
       ok('Oynat düğmesine basıldı.');
     }
-    softClick(el);
-    return softClick(host);
+    const clickedEl = softClick(el);
+    // host === el ise ikinci tıklama oynat/duraklat'ı geri çevirir; tekrar tıklama.
+    const clickedHost = host !== el ? softClick(host) : false;
+    return clickedEl || clickedHost;
   }
 
   /** Oynatıcı sayfa açıldıktan sonra DOM'a geç geliyor; parent modunda kalırsa video hiç başlamaz. */

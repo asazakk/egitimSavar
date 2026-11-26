@@ -119,10 +119,17 @@
 
   function press(el) {
     if (!el || el === document.body || el === document.documentElement) return;
-    let rect = { left: 0, top: 0, width: 0, height: 0 };
+    let rect = null;
     try {
       rect = el.getBoundingClientRect();
     } catch (_) { /* ignore */ }
+    if (!rect) {
+      // Gerçek merkez bilinmiyorsa (0,0) koordinatlı sahte olaylar yollama; yalnız doğrudan tıkla.
+      try {
+        if (typeof el.click === 'function') el.click();
+      } catch (_) { /* ignore */ }
+      return;
+    }
     const opts = {
       bubbles: true,
       cancelable: true,
