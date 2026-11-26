@@ -1858,21 +1858,42 @@
     return tabIconHrefCache[key];
   }
 
-  function ensureIconKeeper() {
-    if (window !== window.top) return;
-    if (!state.iconObserver) {
-      state.iconObserver = new MutationObserver(() => {
-        if (state.tabIconKey) paintTabIcon(state.tabIconKey);
-      });
+  function iconHrefApplied(head, href) {
+    const ours = head.querySelector('link[data-uek-icon]');
+    if (!ours || ours.getAttribute('href') !== href) return false;
+    const links = head.querySelectorAll('link[rel]');
+    for (let i = 0; i < links.length; i += 1) {
+      const el = links[i];
+      if (el === ours) continue;
+      const rel = (el.getAttribute('rel') || '').toLowerCase();
+      if (!/\bicon\b/.test(rel)) continue;
+      if (el.getAttribute('href') !== href) return false;
     }
+    return true;
+  }
+
+  /** Gözlemci bir kez bağlanır. observe() tekrar çağrılmaz; kayıt zaten varken ikinci observe() hata verir. */
+  function ensureIconKeeper() {
+    if (window !== window.top || state.stopped || state.iconObserver) return;
     const head = document.head;
     if (!head) return;
+    state.iconObserver = new MutationObserver(() => {
+      if (state.tabIconKey) paintTabIcon(state.tabIconKey);
+    });
     state.iconObserver.observe(head, {
       childList: true,
       subtree: true,
       attributes: true,
       attributeFilter: ['href', 'rel'],
     });
+  }
+
+  function releaseIconKeeper() {
+    if (!state.iconObserver) return;
+    try {
+      state.iconObserver.disconnect();
+    } catch (_) { /* ignore */ }
+    state.iconObserver = null;
   }
 
   /** Üst çerçevenin sekme simgesini duruma göre boyar. Sayfa kendi ikonunu geri yazsa da tutulur. */
@@ -1883,8 +1904,7 @@
     state.tabIconKey = key;
     const head = document.head || document.documentElement;
     if (!head) return;
-    if (state.iconObserver) state.iconObserver.disconnect();
-    try {
+    if (!iconHrefApplied(head, href)) {
       let link = head.querySelector('link[data-uek-icon]');
       if (!link) {
         link = document.createElement('link');
@@ -1900,9 +1920,8 @@
         if (!/\bicon\b/.test(rel)) return;
         if (el.getAttribute('href') !== href) el.setAttribute('href', href);
       });
-    } finally {
-      ensureIconKeeper();
     }
+    ensureIconKeeper();
   }
 
   function askTabIcon() {
@@ -1921,20 +1940,13 @@
     const keepListener = !!(opts && opts.keepListener);
     postGuard('next-key-cancel');
     if (state.stopped) {
-      if (!keepListener) {
-        if (state.messageListener) {
-          try {
-            extApi.runtime.onMessage.removeListener(state.messageListener);
-          } catch (_) { /* ignore */ }
-          state.messageListener = null;
-        }
-        if (state.iconObserver) {
-          try {
-            state.iconObserver.disconnect();
-          } catch (_) { /* ignore */ }
-          state.iconObserver = null;
-        }
+      if (!keepListener && state.messageListener) {
+        try {
+          extApi.runtime.onMessage.removeListener(state.messageListener);
+        } catch (_) { /* ignore */ }
+        state.messageListener = null;
       }
+      releaseIconKeeper();
       return;
     }
     state.stopped = true;
@@ -1964,12 +1976,7 @@
     state.listeners = [];
     state.boundMedia = null;
     state.boundPlayer = null;
-    if (!keepListener && state.iconObserver) {
-      try {
-        state.iconObserver.disconnect();
-      } catch (_) { /* ignore */ }
-      state.iconObserver = null;
-    }
+    releaseIconKeeper();
     log('Durduruldu.', location.href.slice(0, 100));
   }
 

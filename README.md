@@ -81,6 +81,7 @@ npx web-ext build --source-dir .
 
 - İLERİ tıklaması slaytı değiştirmezse, oynatıcının kendi kısayolu Ctrl+Alt+. sayfa dünyasında bir kez gönderilir. Tıklama işe yaradıysa ikinci kez basılmaz
 - İLERİ düğmesi hiç bulunamayan ve medyası bitmiş slaytta, birkaç saniye sonra aynı kısayol denenir
+- Sekme simgesi gözlemcisi durum güncellemesinde koparılıp yeniden bağlanmıyor; eğitim durunca gözlemci kapanıyor
 
 </details>
 
