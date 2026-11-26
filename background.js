@@ -575,6 +575,42 @@ api.tabs.onRemoved.addListener((tabId) => {
   }).catch(() => {});
 });
 
+function isPlayerUrl(url) {
+  return /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(url || '')
+    || /story\.html/i.test(url || '')
+    || /vod\d*\.uzaktanegitimkapisi/i.test(url || '');
+}
+
+/**
+ * Bitmiş eğitimin sekmesini kapatır. Yalnız eklentinin açtığı oynatıcı sekmesi/penceresi.
+ * Devam eden eğitimlere dokunulmaz.
+ */
+async function closeFinishedCourse(sender, reason) {
+  const tab = sender && sender.tab;
+  if (!tab || tab.id == null) return { closed: false };
+  const tabs = await loadPlayerTabs();
+  const { map } = await readMap();
+  const managed = !!(tabs[String(tab.id)] || (tab.windowId != null && map[String(tab.windowId)]));
+  if (!managed) return { closed: false };
+  if (!isPlayerUrl(tab.url) && !isPlayerUrl(sender.url)) return { closed: false };
+  reportEnqueue({
+    kind: 'event',
+    level: 'ok',
+    windowId: tab.windowId,
+    tabId: tab.id,
+    frameId: sender.frameId || 0,
+    tabTitle: tab.title,
+    url: tab.url,
+    text: `Eğitim bitmiş, sekme kapatıldı (${reason || 'bitti'}).`,
+  });
+  try {
+    await api.tabs.remove(tab.id);
+  } catch (_) {
+    return { closed: false };
+  }
+  return { closed: true };
+}
+
 /** Açık UEK sekmelerindeki tüm çerçevelerde izleyiciyi durdurur. */
 async function stopAll() {
   const manifest = api.runtime.getManifest();
@@ -752,6 +788,10 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await writeMap(map, []);
       return { ok: true };
     }));
+  }
+
+  if (message.type === 'uek-course-finished') {
+    return respondAsync(sendResponse, () => serialized(() => closeFinishedCourse(sender, message.reason)));
   }
 
   if (message.type === 'uek-stop-all') {

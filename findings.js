@@ -174,6 +174,16 @@ globalThis.UEK_FINDINGS = [
     fix: 'hasFocus() her zaman true döner; webkit/moz önekli görünürlük alanları da sahtelenir; document blur\'ü de kesilir. Sekme gizliyken bekleyen requestAnimationFrame geri çağrıları 250 ms\'lik bir zamanlayıcıyla yürütülür. Chrome\'un yoğun kısıtlamasından kaçınmak için sayfa bir Web Lock tutar.',
   },
   {
+    id: 'F18',
+    severity: 'high',
+    status: 'fixed',
+    file: 'page-guard.js / content.js / background.js',
+    title: 'Sekme değişince sessiz video duruyordu; bitmiş eğitim sekmesi açık kalıyordu',
+    problem:
+      'F17 zamanlayıcıyı ve requestAnimationFrame\'i ayakta tutuyordu ama Chrome ve Firefox sessiz (muted) videoyu gizli sekmede medya motorunda durduruyor. pause() yok saymak bunu engellemiyor. Ayrıca eş zamanlı açılan eğitimlerin bir kısmı zaten bitmiş oluyor ve sekmesi açık kalıyordu.',
+    fix: 'Sekme gizliyken video susturulmuyor; ses kısık (0.02) bırakılıyor, tarayıcının kendi pause\'u hemen play() ile geri alınıyor. Kare pompası kısılan setInterval yerine worker saatinde. Bitmiş eğitim (kabukta "tekrar katıl" / tamamlandı yazısı, tüm üniteler işaretli ya da video bitip sıradaki ders yok) birkaç saniye doğrulanınca eklentinin açtığı sekme kapanıyor. Katalog taramasında bitmiş görünenler işaretsiz gelir.',
+  },
+  {
     id: 'N01',
     severity: 'low',
     status: 'note',

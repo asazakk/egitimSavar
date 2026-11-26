@@ -49,7 +49,7 @@
       const label = document.createElement('label');
       const box = document.createElement('input');
       box.type = 'checkbox';
-      box.checked = true;
+      box.checked = !item.done;
       box.dataset.index = String(index);
       const wrap = document.createElement('span');
       wrap.className = 'grow';
@@ -59,7 +59,7 @@
       title.title = item.title;
       const meta = document.createElement('div');
       meta.className = 'meta';
-      meta.textContent = shortUrl(item.url);
+      meta.textContent = item.done ? `Bitmiş · ${shortUrl(item.url)}` : shortUrl(item.url);
       wrap.append(title, meta);
       label.append(box, wrap);
       li.append(label);
@@ -140,7 +140,12 @@
       const res = await api.tabs.sendMessage(tab.id, { type: 'uek-collect-links' }, { frameId: 0 });
       const items = (res && res.links) || [];
       renderLinks(items);
-      setStatus(items.length ? `${items.length} eğitim bulundu.` : 'Bağlantı bulunamadı. Adresleri alta yapıştırın.');
+      const done = items.filter((item) => item.done).length;
+      setStatus(items.length
+        ? (done
+          ? `${items.length} eğitim bulundu. ${done} bitmiş olan işaretsiz; açık sekmeye düşerse kapanır.`
+          : `${items.length} eğitim bulundu.`)
+        : 'Bağlantı bulunamadı. Adresleri alta yapıştırın.');
     } catch (e) {
       renderLinks([]);
       setStatus('Bu sayfadan liste alınamadı. Eğitim adreslerini alta yapıştırın.');

@@ -71,6 +71,10 @@
     lastModalAt: 0,
     lastTickError: '',
     lastTickErrorAt: 0,
+    finishSent: false,
+    finishReason: '',
+    finishSince: 0,
+    finishPollAt: 0,
     messageListener: null,
     intervals: [],
     timeouts: [],
@@ -322,8 +326,43 @@
     return false;
   }
 
+  // Gizli sekmede tarayıcı sessiz videoyu durdurur. Kısık ama kapalı olmayan ses oynatmayı ayakta tutar.
+  const KEEPALIVE_VOLUME = 0.02;
+
+  /** İzole dünyada document.hidden gerçektir; sayfa dünyasındaki sahte "görünür" buraya sızmaz. */
+  function tabHidden() {
+    return document.hidden || visibility.hidden;
+  }
+
+  function keepAliveElement(el) {
+    try {
+      el.muted = false;
+      el.removeAttribute('muted');
+      if ((el.volume || 0) < KEEPALIVE_VOLUME) el.volume = KEEPALIVE_VOLUME;
+    } catch (_) { /* ignore */ }
+  }
+
   /** Kilitten bağımsız: tüm HTML medya + Video.js + Storyline sesi */
   function muteAll() {
+    if (tabHidden()) {
+      queryDeepAll('audio, video').forEach((el) => {
+        if (!el.ended) keepAliveElement(el);
+      });
+      try {
+        const player = findVideoJsPlayer();
+        if (player) {
+          if (typeof player.muted === 'function') player.muted(false);
+          if (typeof player.volume === 'function') player.volume(KEEPALIVE_VOLUME);
+        }
+      } catch (_) { /* ignore */ }
+      try {
+        if (typeof GetPlayer === 'function') {
+          const sp = GetPlayer();
+          if (sp && typeof sp.SetVolume === 'function') sp.SetVolume(2);
+        }
+      } catch (_) { /* ignore */ }
+      return;
+    }
     queryDeepAll('audio, video').forEach((el) => {
       try {
         el.muted = true;
@@ -353,6 +392,10 @@
       const t = ev.target;
       if (!t || (t.tagName !== 'AUDIO' && t.tagName !== 'VIDEO')) return;
       try {
+        if (tabHidden()) {
+          keepAliveElement(t);
+          return;
+        }
         t.muted = true;
         t.volume = 0;
       } catch (_) { /* ignore */ }
@@ -390,6 +433,13 @@
     if (!player && !media) return;
     // Slayt geçişi sırasında play/rate spam Storyline'ı düşürüyor
     if (Date.now() < state.slideLockUntil) return;
+    if (tabHidden()) {
+      if (media) keepAliveElement(media);
+      const rate = currentTargetRate();
+      setRate(player, media, rate);
+      if (!isEnded(player, media) && isPaused(player, media)) playSafe(player, media);
+      return;
+    }
     setMuted(player, media, true);
     const rate = currentTargetRate();
     setRate(player, media, rate);
@@ -1345,8 +1395,97 @@
     return true;
   }
 
+  function lessonRows() {
+    return Array.from(document.querySelectorAll(
+      'a[href*="Video"], a[href*="video"], li a, .list-group-item, [class*="ders"] a, [class*="menu"] a'
+    )).filter((el) => {
+      const href = (el.getAttribute && el.getAttribute('href')) || '';
+      if (href && !href.startsWith('#') && !/^javascript:/i.test(href)) {
+        if (!globalThis.UEKLinks || !UEKLinks.isDirectPlayerUrl(el.href)) return false;
+      }
+      const text = fold(el.innerText || '');
+      return text.length > 1 && text.length < 180;
+    });
+  }
+
+  function lessonMarkedDone(el) {
+    const cls = fold(String(el.className || '') + ' ' + String((el.parentElement && el.parentElement.className) || ''));
+    if (/tamamland|completed|is-complete/.test(cls)) return true;
+    return !!el.querySelector('.fa-check, .glyphicon-ok, .bi-check-circle, .text-success');
+  }
+
+  /** Görünür kısa metin: eğitim kabuğu "bitti" diyorsa. Bölüm içi "tebrikler" yetmez. */
+  function shellFinished() {
+    const nodes = document.querySelectorAll('a, button, input, .btn, span, p, h1, h2, h3, strong, label');
+    let again = false;
+    let phrase = false;
+    let devam = false;
+    for (const el of nodes) {
+      if (!visible(el)) continue;
+      const t = fold(el.innerText || el.value || '');
+      if (!t || t.length > 180) continue;
+      if (/egitime devam et/.test(t)) devam = true;
+      if (/egitime tekrar katil/.test(t)) again = true;
+      if (/egitimi basariyla tamamlad|egitim(iniz|i)? tamamlandi|bu egitimi tamamlad/.test(t)) phrase = true;
+    }
+    if (devam && !again) return false;
+    return again || phrase;
+  }
+
+  function playbackStillNeeded() {
+    const { player, media } = resolveBundle();
+    if (!media) return false;
+    const t = readTime(player, media);
+    const d = readDuration(player, media);
+    if (isEnded(player, media)) return false;
+    if (d > 0 && t / d >= CONFIG.endedRatio) return false;
+    return t > 2 && !isPaused(player, media);
+  }
+
+  function finishedReason() {
+    if (state.quizPaused) return '';
+    // Kabuk "eğitim bitti" diyorsa tekrar oynatma da sekmeyi açık tutmasın.
+    if (shellFinished()) return 'tamamlanmis';
+    const rows = lessonRows();
+    if ((state.mode === 'videojs' || state.mode === 'media') && rows.length >= 2 && rows.every(lessonMarkedDone)) {
+      return 'uniteler-bitti';
+    }
+    if (playbackStillNeeded()) return '';
+    if (state.mode === 'videojs' && state._loggedVjsEnd) {
+      const { player, media } = resolveBundle();
+      const d = readDuration(player, media);
+      const ended = isEnded(player, media) || (d > 0 && readTime(player, media) / d >= CONFIG.endedRatio);
+      if (ended && !findNextControl()) return 'video-bitti';
+    }
+    return '';
+  }
+
+  function pollFinished() {
+    if (state.stopped || state.finishSent) return;
+    const now = Date.now();
+    if (now - state.finishPollAt < 2000) return;
+    state.finishPollAt = now;
+    if (now - state.startedAt < 8000) return;
+    const reason = finishedReason();
+    if (!reason) {
+      state.finishReason = '';
+      state.finishSince = 0;
+      return;
+    }
+    if (state.finishReason !== reason) {
+      state.finishReason = reason;
+      state.finishSince = now;
+      return;
+    }
+    if (now - state.finishSince < 4000) return;
+    state.finishSent = true;
+    ok('Eğitim bitmiş — sekme kapatılıyor.', reason);
+    sendToBackground({ type: 'uek-course-finished', reason });
+  }
+
   function tick() {
     muteAll();
+    pollFinished();
 
     // Parent frame: yalnızca dar kapsamlı "izlemeye devam" modalı
     if (state.mode === 'parent') {

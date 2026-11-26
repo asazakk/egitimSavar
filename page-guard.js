@@ -7,6 +7,8 @@
  *   1) document.hidden / visibilityState / hasFocus() sayfaya her zaman "görünür, odakta" döner.
  *   2) visibilitychange ve pencere blur/focusout olayları sayfa dinleyicilerine ulaşmadan kesilir.
  *   3) Sekme GERÇEKTEN arka plandayken gelen pause() çağrıları yok sayılır.
+ *      Sessiz video arka planda tarayıcı tarafından durdurulur; gizliyken ses kısık ama
+ *      kapalı olmayan (muted=false, volume>0) tutulur ki oynatma askıya alınmasın.
  *   4) Arka planda tarayıcı requestAnimationFrame'i tamamen durdurur (Storyline zaman çizelgesi
  *      buna bağlı). Sekme gizliyken bekleyen kareler bir zamanlayıcıyla çalıştırılır.
  *   5) Chrome'un yoğun zamanlayıcı kısıtlamasına (5 dk sonra dakikada 1) karşı bir Web Lock tutulur.
@@ -59,6 +61,7 @@
     if (hidden === lastReported) return;
     lastReported = hidden;
     notify({ kind: 'visibility', hidden });
+    if (hidden) keepBackgroundMedia();
   }
   window.addEventListener('visibilitychange', () => {
     report(realHidden());
@@ -72,25 +75,110 @@
   window.addEventListener('blur', (ev) => {
     if (ev.target === window || ev.target === document) ev.stopImmediatePropagation();
   }, true);
+  ['focusout', 'freeze', 'webkitvisibilitychange'].forEach((type) => {
+    window.addEventListener(type, (ev) => {
+      if (ev.target === window || ev.target === document) ev.stopImmediatePropagation();
+    }, true);
+  });
 
-  // 3) arka plandayken sayfanın duraklatmasını yok say
+  // 3) arka plandayken sayfanın duraklatmasını yok say.
+  //    Chrome/Firefox sessiz (muted veya volume 0) videoyu gizli sekmede kendisi durdurur;
+  //    JS pause() override'ı bunu tek başına engellemez. Gizliyken medya duyulur ama kısık kalır.
+  const KEEPALIVE_VOLUME = 0.02;
   let blockedCount = 0;
   const origPause = HTMLMediaElement.prototype.pause;
+  const origPlay = HTMLMediaElement.prototype.play;
+
+  function forceAudible(el) {
+    if (!el || el.ended) return;
+    try {
+      if (el.muted) el.muted = false;
+      if ((el.volume || 0) < KEEPALIVE_VOLUME) el.volume = KEEPALIVE_VOLUME;
+    } catch (_) { /* ignore */ }
+  }
+
+  function holdPlaying(el) {
+    forceAudible(el);
+    if (!el || el.ended || !el.paused) return;
+    try {
+      const p = origPlay.call(el);
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) { /* ignore */ }
+  }
+
+  function keepBackgroundMedia() {
+    if (!realHidden()) return;
+    try {
+      document.querySelectorAll('video, audio').forEach(holdPlaying);
+    } catch (_) { /* ignore */ }
+  }
+
+  try {
+    const mutedDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'muted');
+    const volumeDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'volume');
+    if (mutedDesc && mutedDesc.set && mutedDesc.get) {
+      Object.defineProperty(HTMLMediaElement.prototype, 'muted', {
+        configurable: true,
+        enumerable: mutedDesc.enumerable,
+        get() { return mutedDesc.get.call(this); },
+        set(v) {
+          if (realHidden() && !this.ended && v) return;
+          mutedDesc.set.call(this, v);
+        },
+      });
+    }
+    if (volumeDesc && volumeDesc.set && volumeDesc.get) {
+      Object.defineProperty(HTMLMediaElement.prototype, 'volume', {
+        configurable: true,
+        enumerable: volumeDesc.enumerable,
+        get() { return volumeDesc.get.call(this); },
+        set(v) {
+          const next = realHidden() && !this.ended && Number(v) < KEEPALIVE_VOLUME ? KEEPALIVE_VOLUME : v;
+          volumeDesc.set.call(this, next);
+        },
+      });
+    }
+  } catch (_) { /* ignore */ }
+
   HTMLMediaElement.prototype.pause = function egitimSavarPause(...args) {
     if (realHidden() && !this.ended) {
       blockedCount += 1;
       notify({ kind: 'pause-blocked', count: blockedCount });
+      holdPlaying(this);
       return undefined;
     }
     return origPause.apply(this, args);
   };
 
-  // 4) requestAnimationFrame arka planda çalışmaz; gizliyken bekleyen kareleri zamanlayıcıyla yürüt
+  document.addEventListener('pause', (ev) => {
+    const el = ev.target;
+    if (!realHidden() || !el || el.ended) return;
+    if (el.tagName !== 'VIDEO' && el.tagName !== 'AUDIO') return;
+    holdPlaying(el);
+  }, true);
+
+  // 4) requestAnimationFrame arka planda çalışmaz; gizliyken bekleyen kareleri worker saati yürütür
+  let flushHiddenRaf = () => {};
   try {
     const origRaf = window.requestAnimationFrame.bind(window);
     const origCaf = window.cancelAnimationFrame.bind(window);
     const pending = new Map();
     let seq = 0;
+
+    flushHiddenRaf = () => {
+      if (!pending.size || !realHidden()) return;
+      const batch = Array.from(pending.entries());
+      const ts = performance.now();
+      batch.forEach(([id, entry]) => {
+        if (!pending.delete(id)) return;
+        origCaf(entry.raf);
+        try {
+          entry.callback(ts);
+        } catch (e) {
+          setTimeout(() => { throw e; }, 0);
+        }
+      });
+    };
 
     window.requestAnimationFrame = function egitimSavarRaf(callback) {
       if (typeof callback !== 'function') return origRaf(callback);
@@ -112,21 +200,6 @@
       return undefined;
     };
 
-    setInterval(() => {
-      if (!pending.size || !realHidden()) return;
-      const batch = Array.from(pending.entries());
-      const ts = performance.now();
-      batch.forEach(([id, entry]) => {
-        if (!pending.delete(id)) return;
-        origCaf(entry.raf);
-        try {
-          entry.callback(ts);
-        } catch (e) {
-          // sayfanın kendi hatası; döngüyü bozmasın ama sayfa konsoluna düşsün
-          setTimeout(() => { throw e; }, 0);
-        }
-      });
-    }, 250);
   } catch (_) { /* ignore */ }
 
   // 5) Chrome yoğun zamanlayıcı kısıtlaması: Web Lock tutan sayfa muaf
@@ -245,12 +318,24 @@
       });
     }, true);
 
-    // İçerik betiğine kısılmayan bir saat: gizliyken ~500 ms'de bir "tick"
+    // Gizliyken kısılmayan saat: medya ve kare pompası ~100 ms, içerik betiğine tick ~500 ms
+    let pumps = 0;
     const driver = () => {
-      if (realHidden()) notify({ kind: 'tick' });
-      add(driver, 500, [], false);
+      if (realHidden()) {
+        flushHiddenRaf();
+        keepBackgroundMedia();
+        pumps += 1;
+        if (pumps % 5 === 0) notify({ kind: 'tick' });
+      }
+      add(driver, 100, [], false);
     };
-    add(driver, 500, [], false);
+    add(driver, 100, [], false);
+  } else {
+    nativeSetInterval(() => {
+      if (!realHidden()) return;
+      flushHiddenRaf();
+      keepBackgroundMedia();
+    }, 250);
   }
 
   // 7) Sessiz bir AudioContext: Firefox/Chrome çalışan ses bağlamı olan sayfayı kısmaya daha
