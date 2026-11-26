@@ -77,6 +77,14 @@ npx web-ext build --source-dir .
 ## Sürüm notları
 
 <details>
+<summary><b>1.7.7</b> · sekme simgesi duruma göre değişir</summary>
+
+- Açık eğitim sekmelerinin simgesi duruma göre değişir: oynatılıyor, çalışıyor, duraklatıldı, sınav, takıldı, bağlantı yok, durduruldu
+- Video durduğunda durum artık “çalışıyor” sayılmaz; sekmede ve raporda **Duraklatıldı** görünür
+
+</details>
+
+<details>
 <summary><b>1.7.6</b> · kapaktaki oynat düğmesi</summary>
 
 - Açılıştaki beyaz daire Video.js değil; `svg.play-icon` (`data-dv_ref="playIcon"`). Bu ikona ve üzerindeki düğmeye basılıyor, video sessiz başlıyor

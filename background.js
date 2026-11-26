@@ -120,6 +120,8 @@ async function applyReportItems(items) {
       rep.sessions[key] = s;
     }
     s.lastSeen = Math.max(s.lastSeen, item.ts);
+    if (item.tabId != null) s.tabId = item.tabId;
+    if (item.windowId != null) s.windowId = item.windowId;
     if (item.tabTitle && s.title === 'Eğitim') s.title = item.tabTitle;
     if (item.url && item.frameId === 0) s.url = item.url;
     const frame = item.frameId === 0 ? 'top' : `f${item.frameId}`;
@@ -204,6 +206,7 @@ async function refreshAction() {
     if (typeof actionApi.setBadgeTextColor === 'function') {
       await actionApi.setBadgeTextColor({ color: '#ffffff' });
     }
+    await pushTabIcons(sum);
   } catch (e) {
     console.warn('[egitimSavar-BG] Simge güncellenemedi', e && e.message);
   }
@@ -461,6 +464,7 @@ async function createPlayerWindow(item, bounds) {
     reportEnqueue({
       kind: 'open',
       windowId: win.id,
+      tabId: win.tabs && win.tabs[0] ? win.tabs[0].id : undefined,
       title: item.title || 'Eğitim',
       url: item.url,
       text: `Pencere açıldı (${bounds.left}, ${bounds.top} — ${bounds.width}×${bounds.height})`,
@@ -603,6 +607,52 @@ api.tabs.onRemoved.addListener((tabId) => {
     });
   }).catch(() => {});
 });
+
+// Sekme şeridindeki simge: son gönderilen durum. Aynı anahtarı tekrar yollama.
+const tabIconSent = new Map();
+
+function courseSession(session) {
+  if (!session || session.closedAt) return false;
+  if (session.managed) return true;
+  if (isPlayerUrl(session.url)) return true;
+  return Object.values(session.frames || {}).some((f) => {
+    const mode = f && f.mode;
+    return mode && mode !== 'parent' && mode !== 'unknown';
+  });
+}
+
+/** Eğitim sekmesinin favicon'unu durum anahtarına göre günceller (yalnız üst çerçeve). */
+async function pushTabIcons(sum) {
+  if (!api.tabs || !sum) return;
+  const wanted = new Map();
+  sum.items.forEach((item) => {
+    if (item.closed) return;
+    const session = item.session;
+    if (!courseSession(session) || session.tabId == null) return;
+    wanted.set(session.tabId, item.status.key);
+  });
+  for (const [tabId, key] of wanted) {
+    if (tabIconSent.get(tabId) === key) continue;
+    try {
+      await api.tabs.sendMessage(tabId, { type: 'uek-tab-icon', key }, { frameId: 0 });
+      tabIconSent.set(tabId, key);
+    } catch (_) {
+      tabIconSent.delete(tabId);
+    }
+  }
+  [...tabIconSent.keys()].forEach((id) => {
+    if (!wanted.has(id)) tabIconSent.delete(id);
+  });
+}
+
+function statusKeyForTab(report, tabId) {
+  const Core = globalThis.UEKReportCore;
+  if (!Core || tabId == null) return '';
+  const sum = Core.summarize(report, [], Date.now());
+  const item = sum.items.find((i) => !i.closed && i.session && i.session.tabId === tabId);
+  if (!item || !courseSession(item.session)) return '';
+  return item.status.key;
+}
 
 function isPlayerUrl(url) {
   return /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(url || '')
@@ -782,6 +832,18 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     }
     return undefined;
+  }
+
+  if (message.type === 'uek-tab-icon-query') {
+    const tabId = sender && sender.tab && sender.tab.id;
+    if (tabId == null || (sender.frameId || 0) !== 0) {
+      sendResponse({ key: '' });
+      return undefined;
+    }
+    return respondAsync(sendResponse, async () => {
+      const data = await api.storage.local.get(REPORT_KEY);
+      return { key: statusKeyForTab(data[REPORT_KEY], tabId) };
+    });
   }
 
   if (message.type === 'uek-am-i-player-window') {

@@ -46,6 +46,9 @@
     if (main && !main.stopped && (main.held || main.idleSec > STALL_SEC)) {
       return { key: 'stalled', label: 'Takıldı', cls: 'b-bad', hint: `${main.idleSec} sn'dir ilerleme yok.` };
     }
+    if (main && main.hasMedia && main.paused === true) {
+      return { key: 'paused', label: 'Duraklatıldı', cls: 'b-warn', hint: 'Video durmuş; oynatma yeniden denenecek.' };
+    }
     if (main && main.paused === false) {
       return {
         key: 'playing',
@@ -96,6 +99,7 @@
       stalled: count('stalled'),
       nolink: count('nolink'),
       quiz: count('quiz'),
+      paused: count('paused'),
       stopped: count('stopped'),
       closed: count('closed'),
       queued: (queue || []).length,
@@ -118,9 +122,10 @@
   const SYMBOL = {
     playing: '▶',
     running: '●',
+    paused: '⏸',
     quiz: '?',
     stalled: '⚠',
-    nolink: '…',
+    nolink: '×',
     stopped: '■',
     closed: '✓',
   };
@@ -176,6 +181,7 @@
     statusOf,
     sortedSessions,
     summarize,
+    SYMBOL,
     tooltipText,
     badgeFor,
   };

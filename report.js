@@ -45,6 +45,11 @@
     return h('span', { class: `badge ${cls}`, text });
   }
 
+  function statusMark(status) {
+    const mark = globalThis.UEKReportCore && UEKReportCore.SYMBOL[status.key];
+    return mark ? `${mark} ${status.label}` : status.label;
+  }
+
   function toast(text) {
     const el = $('toast');
     el.textContent = text;
@@ -152,7 +157,7 @@
             }).catch(() => toast('Sekmeye geçilemedi.'));
           },
         })),
-      h('td', null, badge(status.label, status.cls), status.hint ? h('div', { class: 'meta', text: status.hint }) : null),
+      h('td', null, badge(statusMark(status), status.cls), status.hint ? h('div', { class: 'meta', text: status.hint }) : null),
       h('td', { text: main && main.slide ? main.slide : '—' }),
       h('td', null,
         pct == null

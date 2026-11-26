@@ -248,7 +248,7 @@
     const sum = Core.summarize(data.uekReport, data.uekQueue || [], Date.now());
 
     const dot = document.getElementById('live-dot');
-    dot.className = `dot ${sum.stalled || sum.nolink || sum.openErrors ? 'bad' : sum.quiz ? 'warn' : sum.running ? 'on' : ''}`.trim();
+    dot.className = `dot ${sum.stalled || sum.nolink || sum.openErrors ? 'bad' : sum.quiz || sum.paused ? 'warn' : sum.running ? 'on' : ''}`.trim();
     document.getElementById('live-updated').textContent =
       `Güncelleme ${new Date().toLocaleTimeString('tr-TR')}`;
 
@@ -282,7 +282,11 @@
           go();
         }
       });
-      li.append(el('div', 'row-title', i.title), el('span', `badge ${i.status.cls}`, i.status.label));
+      const mark = Core.SYMBOL[i.status.key];
+      li.append(
+        el('div', 'row-title', i.title),
+        el('span', `badge ${i.status.cls}`, mark ? `${mark} ${i.status.label}` : i.status.label)
+      );
       if (i.pct != null) {
         const bar = el('div', 'bar');
         const fill = el('i');
@@ -295,7 +299,7 @@
       if (i.slide) bits.push(`slayt ${i.slide}`);
       if (i.main && i.main.hasMedia) bits.push(`${i.main.rate}x${i.main.muted ? '' : ' · SES AÇIK'}`);
       bits.push(`${i.clicks} İLERİ`);
-      if (i.status.hint && ['stalled', 'quiz', 'nolink'].includes(i.status.key)) bits.push(i.status.hint);
+      if (i.status.hint && ['stalled', 'quiz', 'nolink', 'paused'].includes(i.status.key)) bits.push(i.status.hint);
       li.append(el('div', 'row-meta', bits.join(' · ')));
       return li;
     }));

@@ -78,6 +78,8 @@
     managedTab: false,
     lastStartClickAt: 0,
     playOverlayLogged: false,
+    tabIconKey: '',
+    iconObserver: null,
     messageListener: null,
     intervals: [],
     timeouts: [],
@@ -1743,11 +1745,155 @@
     sendToBackground({ type: 'uek-heartbeat', data });
   }
 
-  function stop() {
-    if (state.stopped) return;
+  // Sekme şeridi simgesi. Anahtarlar report-core statusOf ile aynı.
+  const TAB_ICON = {
+    playing: { bg: '#15803d', glyph: 'play' },
+    running: { bg: '#2557d6', glyph: 'dot' },
+    paused: { bg: '#d97706', glyph: 'pause' },
+    quiz: { bg: '#d97706', glyph: 'quiz' },
+    stalled: { bg: '#d93025', glyph: 'bang' },
+    nolink: { bg: '#a15c00', glyph: 'off' },
+    stopped: { bg: '#4b5563', glyph: 'stop' },
+  };
+  const tabIconHrefCache = Object.create(null);
+
+  function tabIconHref(key) {
+    if (tabIconHrefCache[key]) return tabIconHrefCache[key];
+    const spec = TAB_ICON[key];
+    if (!spec) return '';
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const g = canvas.getContext('2d');
+    if (!g) return '';
+    g.fillStyle = spec.bg;
+    g.beginPath();
+    g.arc(16, 16, 15, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#ffffff';
+    g.strokeStyle = '#ffffff';
+    g.lineWidth = 3.2;
+    g.lineCap = 'round';
+    if (spec.glyph === 'play') {
+      g.beginPath();
+      g.moveTo(12, 8.5);
+      g.lineTo(23.5, 16);
+      g.lineTo(12, 23.5);
+      g.closePath();
+      g.fill();
+    } else if (spec.glyph === 'dot') {
+      g.beginPath();
+      g.arc(16, 16, 5, 0, Math.PI * 2);
+      g.fill();
+    } else if (spec.glyph === 'pause') {
+      g.fillRect(10, 8, 4, 16);
+      g.fillRect(18, 8, 4, 16);
+    } else if (spec.glyph === 'stop') {
+      g.fillRect(10, 10, 12, 12);
+    } else if (spec.glyph === 'bang') {
+      g.fillRect(14.2, 7, 3.6, 12);
+      g.beginPath();
+      g.arc(16, 23.2, 2.1, 0, Math.PI * 2);
+      g.fill();
+    } else if (spec.glyph === 'quiz') {
+      g.font = '700 20px Segoe UI, system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText('?', 16, 17);
+    } else if (spec.glyph === 'off') {
+      g.beginPath();
+      g.moveTo(9.5, 9.5);
+      g.lineTo(22.5, 22.5);
+      g.moveTo(22.5, 9.5);
+      g.lineTo(9.5, 22.5);
+      g.stroke();
+    }
+    tabIconHrefCache[key] = canvas.toDataURL('image/png');
+    return tabIconHrefCache[key];
+  }
+
+  function ensureIconKeeper() {
+    if (window !== window.top) return;
+    if (!state.iconObserver) {
+      state.iconObserver = new MutationObserver(() => {
+        if (state.tabIconKey) paintTabIcon(state.tabIconKey);
+      });
+    }
+    const head = document.head;
+    if (!head) return;
+    state.iconObserver.observe(head, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['href', 'rel'],
+    });
+  }
+
+  /** Üst çerçevenin sekme simgesini duruma göre boyar. Sayfa kendi ikonunu geri yazsa da tutulur. */
+  function paintTabIcon(key) {
+    if (window !== window.top) return;
+    const href = tabIconHref(key);
+    if (!href) return;
+    state.tabIconKey = key;
+    const head = document.head || document.documentElement;
+    if (!head) return;
+    if (state.iconObserver) state.iconObserver.disconnect();
+    try {
+      let link = head.querySelector('link[data-uek-icon]');
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        link.type = 'image/png';
+        link.setAttribute('data-uek-icon', '1');
+        head.appendChild(link);
+      }
+      if (link.getAttribute('href') !== href) link.setAttribute('href', href);
+      head.querySelectorAll('link[rel]').forEach((el) => {
+        if (el === link) return;
+        const rel = (el.getAttribute('rel') || '').toLowerCase();
+        if (!/\bicon\b/.test(rel)) return;
+        if (el.getAttribute('href') !== href) el.setAttribute('href', href);
+      });
+    } finally {
+      ensureIconKeeper();
+    }
+  }
+
+  function askTabIcon() {
+    if (window !== window.top) return;
+    try {
+      const p = extApi.runtime.sendMessage({ type: 'uek-tab-icon-query' });
+      if (p && typeof p.then === 'function') {
+        p.then((res) => {
+          if (res && res.key) paintTabIcon(res.key);
+        }).catch(() => {});
+      }
+    } catch (_) { /* eklenti bağlamı yok */ }
+  }
+
+  function stop(opts) {
+    const keepListener = !!(opts && opts.keepListener);
+    if (state.stopped) {
+      if (!keepListener) {
+        if (state.messageListener) {
+          try {
+            extApi.runtime.onMessage.removeListener(state.messageListener);
+          } catch (_) { /* ignore */ }
+          state.messageListener = null;
+        }
+        if (state.iconObserver) {
+          try {
+            state.iconObserver.disconnect();
+          } catch (_) { /* ignore */ }
+          state.iconObserver = null;
+        }
+      }
+      return;
+    }
     state.stopped = true;
+    if (keepListener && window === window.top) paintTabIcon('stopped');
     sendHeartbeat();
-    if (state.messageListener) {
+    if (!keepListener && state.messageListener) {
       try {
         extApi.runtime.onMessage.removeListener(state.messageListener);
       } catch (_) { /* ignore */ }
@@ -1771,6 +1917,12 @@
     state.listeners = [];
     state.boundMedia = null;
     state.boundPlayer = null;
+    if (!keepListener && state.iconObserver) {
+      try {
+        state.iconObserver.disconnect();
+      } catch (_) { /* ignore */ }
+      state.iconObserver = null;
+    }
     log('Durduruldu.', location.href.slice(0, 100));
   }
 
@@ -1826,9 +1978,13 @@
   // izole dünya yüzünden sayfa konsolundan çalışmaz; rapor sayfasındaki düğme bunu kullanır).
   state.messageListener = (message, _sender, sendResponse) => {
     if (!message) return undefined;
+    if (message.type === 'uek-tab-icon' && window === window.top) {
+      if (message.key) paintTabIcon(message.key);
+      return undefined;
+    }
     if (message.type === 'uek-stop') {
       warn('Kullanıcı isteğiyle durduruldu.');
-      stop();
+      stop({ keepListener: true });
       return undefined;
     }
     if (message.type === 'uek-collect-links' && window === window.top) {
@@ -1842,6 +1998,7 @@
 
   if (window === window.top) {
     detectManagedTab();
+    askTabIcon();
   }
 
   window.__uekExt = {
