@@ -204,6 +204,16 @@ globalThis.UEK_FINDINGS = [
     fix: 'Eklentinin açtığı sekmede "Eğitime Başla / Devam Et / Katıl" ya da ilk bitmemiş ders otomatik açılıyor. Sekme, sayfa yüklenip adres oturana kadar önde kalıyor. Video ilerleyene kadar sessiz başlatılıyor; ilerleyince arka planda ses 0.02 ile sınırlanıyor.',
   },
   {
+    id: 'F21',
+    severity: 'high',
+    status: 'fixed',
+    file: 'content.js',
+    title: '"Devam Et" ile eğitime girilmiyordu',
+    problem:
+      'F20 düğme metnini sınıf adıyla birleştirip 90 karakteri aşınca eliyordu ve "Devam Et" ifadesini tanımıyordu. Kabukta .video-js varsa sayfa oynatıcı sanılıp yönlendirme atlanıyordu. Önceki sürüm sayfadaki tek oynatıcı adresine gidiyor, video ise oynatıcı geç yüklendiğinde parent modunda kaldığı için başlamıyordu.',
+    fix: 'Görünen yazısı "Devam Et" olan düğmeye basılıyor. Düğme yoksa tek oynatıcı adresi yine açılıyor. Oynatıcı DOM\'a gelince mod yenilenip oynat ve büyük oynat düğmesi deneniyor.',
+  },
+  {
     id: 'N01',
     severity: 'low',
     status: 'note',

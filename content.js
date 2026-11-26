@@ -1499,54 +1499,66 @@
 
   function isAlreadyPlayerPage() {
     return /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(location.pathname)
-      || !!document.querySelector('#ScoFrame, #CbikoPl, .video-js');
+      || !!document.querySelector('#ScoFrame, #CbikoPl');
+  }
+
+  function buttonText(el) {
+    return fold(el.innerText || el.textContent || el.value || el.getAttribute('aria-label') || el.getAttribute('title') || '');
   }
 
   /**
-   * Katalogdan açılan sekme çoğu zaman oynatıcı değil, "Eğitime Başla / Devam Et" kabuğudur.
-   * Bu düğme basılmadan video hiç oluşmaz.
+   * Kabuktaki "Devam Et" eğitime gider. Sınıf adı metne karışmasın diye yalnız görünen yazıya bakılır.
+   * Düğme yoksa sayfadaki tek oynatıcı adresi açılır (önceki sürümün yönlendirmesi).
    */
   function clickCourseStart() {
     if (window !== window.top || !state.managedTab || state.stopped) return false;
     if (isAlreadyPlayerPage()) return false;
     const now = Date.now();
-    if (now - state.lastStartClickAt < 1500) return false;
+    if (now - state.lastStartClickAt < 1200) return false;
 
-    const startRe = /egitime basla|egitimi baslat|egitime devam et|egitime katil|izlemeye basla|derse basla|egitime gir/;
+    const startRe = /^(devam et|basla|oynat|egitime basla|egitimi baslat|egitime devam et|egitime katil|izlemeye basla|derse basla|egitime gir)$/;
     const controls = queryDeepAll('a, button, input[type="button"], input[type="submit"], [role="button"]');
     for (const el of controls) {
       if (!visible(el) || !looksEnabled(el) || isDangerousNav(el)) continue;
-      const label = fold(`${controlLabel(el)} ${el.value || ''}`);
-      if (!label || label.length > 90 || /tekrar katil/.test(label)) continue;
-      if (!startRe.test(label)) continue;
-      const href = (el.href || (el.getAttribute && el.getAttribute('href')) || '');
+      const label = buttonText(el);
+      if (!startRe.test(label) || /tekrar katil/.test(label)) continue;
       state.lastStartClickAt = now;
-      ok('Eğitim başlatılıyor:', label.slice(0, 80));
-      if (href && globalThis.UEKLinks && UEKLinks.isDirectPlayerUrl(href)) {
-        location.assign(href);
-        return true;
-      }
-      return softClick(el);
-    }
-
-    const links = queryDeepAll('a[href]');
-    for (const el of links) {
-      const href = el.href || '';
-      if (!globalThis.UEKLinks || !UEKLinks.isDirectPlayerUrl(href) || href === location.href) continue;
-      if (!visible(el) || isDangerousNav(el)) continue;
-      const card = el.closest ? el.closest('li, tr, article, .card, .list-group-item') : null;
-      const cardText = fold((card || el).innerText || '');
-      if (/tamamland|tekrar katil/.test(cardText) && !/devam et/.test(cardText)) continue;
-      if (lessonMarkedDone(el)) continue;
-      state.lastStartClickAt = now;
-      ok('İlk derse giriliyor.');
-      location.assign(href);
+      ok('Eğitime giriliyor:', label);
+      softClick(el);
       return true;
     }
-    return false;
+
+    if (!globalThis.UEKLinks) return false;
+    const players = UEKLinks.collectFromDocument(document)
+      .filter((item) => UEKLinks.isDirectPlayerUrl(item.url) && item.url !== location.href.split('#')[0]);
+    if (players.length !== 1) return false;
+    state.lastStartClickAt = now;
+    ok('Oynatıcıya giriliyor.');
+    location.assign(players[0].url);
+    return true;
+  }
+
+  function clickPlayOverlay() {
+    const el = queryDeep('.vjs-big-play-button, .vjs-play-control.vjs-paused, .play-button');
+    if (!el || !visible(el) || !looksEnabled(el)) return false;
+    ok('Oynat düğmesine basıldı.');
+    return softClick(el);
+  }
+
+  /** Oynatıcı sayfa açıldıktan sonra DOM'a geç geliyor; parent modunda kalırsa video hiç başlamaz. */
+  function refreshMode() {
+    const next = detectMode();
+    if (next === state.mode || next === 'parent') return;
+    const prev = state.mode;
+    state.mode = next;
+    if (prev === 'parent') {
+      ok('Oynatıcı yüklendi.', 'mod=' + next);
+      waitForMedia();
+    }
   }
 
   function tick() {
+    refreshMode();
     muteAll();
     pollFinished();
     if (window === window.top && state.managedTab && !isAlreadyPlayerPage()) {
@@ -1656,10 +1668,9 @@
         if (mediaMoved()) noteActivity();
         applyPlayback(player, media);
         tryAdvanceFromMedia(player, media);
-        const big = document.querySelector('.vjs-big-play-button');
-        if (big && visible(big) && isPaused(player, media) && !isEnded(player, media)) {
-          softClick(big);
-        }
+      }
+      if ((!media && !player) || (isPaused(player, media) && !isEnded(player, media))) {
+        clickPlayOverlay();
       }
       return;
     }

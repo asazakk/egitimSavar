@@ -413,7 +413,7 @@ async function waitUntilCourseReady(tabId) {
       if (!stableSince) stableSince = Date.now();
       const onPlayer = /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(url)
         || /story\.html/i.test(url);
-      const holdMs = onPlayer ? 2200 : 4000;
+      const holdMs = onPlayer ? 5000 : 4500;
       if (Date.now() - stableSince >= holdMs) return;
     } else {
       lastUrl = url;
