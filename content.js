@@ -737,7 +737,14 @@
    * durum, olay kesme ve arka plandayken pause() engeli. Bu fonksiyon yalnızca o betiğin
    * bildirdiği gerçek durumu takip eder, oynatmayı geri açar ve raporlar.
    */
-  const visibility = { hidden: false, guardReady: false, pauseBlocked: 0, lastPauseLogAt: 0 };
+  const visibility = {
+    hidden: false,
+    guardReady: false,
+    pauseBlocked: 0,
+    lastPauseLogAt: 0,
+    lastGuardTickAt: 0,
+    lastBeatAt: 0,
+  };
 
   function resumeAfterVisibility() {
     const { player, media } = resolveBundle();
@@ -753,6 +760,14 @@
     const d = ev.data;
     if (d.kind === 'ready') {
       visibility.guardReady = true;
+    } else if (d.kind === 'tick') {
+      // Gizli sekmede kendi setInterval'imiz kısılır; page-guard'ın worker saati sürücü olur
+      visibility.lastGuardTickAt = Date.now();
+      safeTick();
+      if (Date.now() - visibility.lastBeatAt > 3500) {
+        visibility.lastBeatAt = Date.now();
+        sendHeartbeat();
+      }
     } else if (d.kind === 'visibility') {
       const was = visibility.hidden;
       visibility.hidden = !!d.hidden;

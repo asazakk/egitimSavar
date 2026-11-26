@@ -6,6 +6,10 @@
   const linksEl = document.getElementById('links');
   const statusEl = document.getElementById('status');
   const manualEl = document.getElementById('manual');
+  const listHead = document.getElementById('list-head');
+  const selectAll = document.getElementById('select-all');
+  const selectLabel = document.getElementById('select-label');
+  const startBtn = document.getElementById('start-tabs');
 
   let found = [];
 
@@ -36,25 +40,54 @@
     found = items;
     linksEl.textContent = '';
     if (!items.length) {
-      linksEl.innerHTML = '<li class="empty">Bu sayfada eğitim bağlantısı yok. Alta yapıştırabilirsiniz.</li>';
+      linksEl.innerHTML = '<li class="empty">Bu sayfada eğitim bağlantısı yok. “Gelişmiş” bölümünden bağlantı yapıştırabilirsiniz.</li>';
+      updateSelection();
       return;
     }
     items.forEach((item, index) => {
       const li = document.createElement('li');
+      const label = document.createElement('label');
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.checked = true;
       box.dataset.index = String(index);
       const wrap = document.createElement('span');
+      wrap.className = 'grow';
       const title = document.createElement('div');
+      title.className = 't';
       title.textContent = item.title;
+      title.title = item.title;
       const meta = document.createElement('div');
       meta.className = 'meta';
-      meta.textContent = item.url;
+      meta.textContent = shortUrl(item.url);
       wrap.append(title, meta);
-      li.append(box, wrap);
+      label.append(box, wrap);
+      li.append(label);
       linksEl.append(li);
     });
+    updateSelection();
+  }
+
+  function shortUrl(url) {
+    try {
+      const u = new URL(url);
+      return u.hostname.replace(/^www\./, '') + u.pathname;
+    } catch (_) {
+      return url;
+    }
+  }
+
+  function updateSelection() {
+    const boxes = [...linksEl.querySelectorAll('input[type="checkbox"]')];
+    const checked = boxes.filter((box) => box.checked).length;
+    const pasted = UEKLinks.parseText(manualEl.value).length;
+    const total = checked + pasted;
+    listHead.hidden = !boxes.length;
+    selectAll.checked = boxes.length > 0 && checked === boxes.length;
+    selectAll.indeterminate = checked > 0 && checked < boxes.length;
+    selectLabel.textContent = boxes.length ? `Tümünü seç · ${checked}/${boxes.length}` : 'Tümünü seç';
+    startBtn.disabled = total === 0;
+    startBtn.textContent = total ? `Eş zamanlı başlat (${total})` : 'Eş zamanlı başlat';
   }
 
   async function loadState() {
@@ -62,8 +95,7 @@
     const slots = data.uekScreenSlots || [];
     const queue = data.uekQueue || [];
     renderSlots(slots);
-    const q = queue.length ? `Sırada ${queue.length} eğitim var.` : 'Sıra boş.';
-    setStatus(q);
+    setStatus(queue.length ? `Sırada ${queue.length} eğitim var.` : '');
     return { slots, queue };
   }
 
@@ -172,6 +204,20 @@
     }
   }
 
+  async function focusSession(session) {
+    const res = await api.runtime.sendMessage({
+      type: 'uek-focus-session',
+      tabId: session.tabId,
+      windowId: session.windowId,
+      url: session.url,
+    });
+    if (res && res.ok) {
+      window.close();
+      return;
+    }
+    setStatus('Eğitimin sekmesi bulunamadı; kapanmış olabilir.');
+  }
+
   async function clearQueue() {
     await api.runtime.sendMessage({ type: 'uek-clear-queue' });
     setStatus('Sıra temizlendi. Açık pencereler kapanınca yeni eğitim açılmaz.');
@@ -185,8 +231,10 @@
     return node;
   }
 
-  function chip(text, cls) {
-    return el('span', `chip ${cls || ''}`.trim(), text);
+  function stat(value, label, cls) {
+    const node = el('div', `stat ${cls || ''}`.trim());
+    node.append(el('b', '', String(value)), el('span', '', label));
+    return node;
   }
 
   async function renderLive() {
@@ -201,23 +249,34 @@
 
     const chips = document.getElementById('live-chips');
     chips.replaceChildren(
-      chip(`${sum.open} açık`),
-      chip(`${sum.running} çalışıyor`, sum.running ? 'good' : ''),
-      chip(`${sum.attention} dikkat`, sum.attention ? 'bad' : ''),
-      chip(`${sum.queued} sırada`, sum.queued ? 'warn' : ''),
-      chip(`${sum.closed} kapandı`)
+      stat(sum.open, 'Açık'),
+      stat(sum.running, 'Çalışıyor', sum.running ? 'good' : ''),
+      stat(sum.attention, 'Dikkat', sum.attention ? 'bad' : ''),
+      stat(sum.queued, 'Sırada', sum.queued ? 'warn' : '')
     );
 
     const list = document.getElementById('live-list');
     const open = sum.items.filter((i) => !i.closed);
     if (!open.length) {
       list.replaceChildren(el('li', 'empty', sum.items.length
-        ? 'Açık eğitim penceresi yok.'
-        : 'Henüz kayıt yok. Eğitim sayfası açılınca burada görünür.'));
+        ? 'Açık eğitim yok.'
+        : 'Henüz kayıt yok. Eğitim açılınca burada görünür.'));
       return;
     }
     list.replaceChildren(...open.map((i) => {
-      const li = el('li');
+      const li = el('li', 'goto');
+      const sess = i.session || {};
+      li.tabIndex = 0;
+      li.setAttribute('role', 'button');
+      li.title = 'Bu eğitimin sekmesine git';
+      const go = () => focusSession(sess).catch(() => setStatus('Sekmeye geçilemedi.'));
+      li.addEventListener('click', go);
+      li.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          go();
+        }
+      });
       li.append(el('div', 'row-title', i.title), el('span', `badge ${i.status.cls}`, i.status.label));
       if (i.pct != null) {
         const bar = el('div', 'bar');
@@ -260,9 +319,16 @@
   document.getElementById('open').addEventListener('click', () => {
     openSelected().catch(() => setStatus('Dağıtım başarısız.'));
   });
-  document.getElementById('start-tabs').addEventListener('click', () => {
+  startBtn.addEventListener('click', () => {
     startInTabs().catch(() => setStatus('Sekmeler açılamadı.'));
   });
+  selectAll.addEventListener('change', () => {
+    linksEl.querySelectorAll('input[type="checkbox"]').forEach((box) => { box.checked = selectAll.checked; });
+    updateSelection();
+  });
+  linksEl.addEventListener('change', updateSelection);
+  manualEl.addEventListener('input', updateSelection);
+  updateSelection();
   document.getElementById('clear-queue').addEventListener('click', () => {
     clearQueue().catch(() => setStatus('Sıra temizlenemedi.'));
   });

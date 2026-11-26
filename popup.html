@@ -6,180 +6,244 @@
   <link rel="icon" href="icons/icon-32.png">
   <style>
     :root {
-      --bg: #f5f6f8;
-      --card: #fff;
-      --text: #1c1f24;
-      --muted: #5f6672;
-      --line: #dfe2e8;
-      --accent: #1f5fbf;
-      --good: #1a7f37;
-      --good-bg: #dcf5e3;
-      --warn: #8a5a00;
-      --warn-bg: #fff1cc;
+      color-scheme: light dark;
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --text: #14171c;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --hover: #f1f3f6;
+      --accent: #2557d6;
+      --accent-text: #ffffff;
+      --good: #15803d;
+      --good-bg: #e6f6ec;
+      --warn: #a15c00;
+      --warn-bg: #fff3d6;
       --bad: #b42318;
-      --bad-bg: #fde4e1;
-      --info: #1f5fbf;
-      --info-bg: #e3edfd;
-      --off: #5f6672;
-      --off-bg: #eceef2;
+      --bad-bg: #fde8e6;
+      --info: #2557d6;
+      --info-bg: #e8effd;
+      --off: #6b7280;
+      --off-bg: #eef0f3;
+      --radius: 10px;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #14161a;
-        --card: #1d2026;
-        --text: #e8eaee;
-        --muted: #9aa2af;
-        --line: #2e333c;
-        --accent: #8ab4ff;
+        --bg: #111317;
+        --surface: #181b21;
+        --text: #e9ebef;
+        --muted: #9097a3;
+        --line: #272b33;
+        --hover: #20242b;
+        --accent: #6d9cff;
+        --accent-text: #0b1220;
         --good: #5fd382;
-        --good-bg: #173424;
+        --good-bg: #153424;
         --warn: #f2c35b;
-        --warn-bg: #3a2e12;
+        --warn-bg: #38300f;
         --bad: #ff8a80;
-        --bad-bg: #3d1b18;
+        --bad-bg: #3b1c19;
         --info: #8ab4ff;
-        --info-bg: #182640;
-        --off: #9aa2af;
-        --off-bg: #272b33;
+        --info-bg: #172542;
+        --off: #9097a3;
+        --off-bg: #23272e;
       }
     }
     * { box-sizing: border-box; }
     body {
-      font: 13px/1.4 system-ui, "Segoe UI", sans-serif;
-      width: 380px;
+      width: 360px;
       margin: 0;
-      padding: 12px;
+      padding: 14px;
       background: var(--bg);
       color: var(--text);
+      font: 13px/1.45 system-ui, "Segoe UI", sans-serif;
     }
-    h1 { font-size: 15px; margin: 0; }
-    h2 { font-size: 12px; margin: 14px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-    p { margin: 0 0 10px; color: var(--muted); }
+    h2 {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    p { margin: 0; color: var(--muted); font-size: 12px; }
+
+    /* üst bilgi */
+    .top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .top img { width: 28px; height: 28px; border-radius: 7px; }
+    .top .name { font-size: 15px; font-weight: 650; letter-spacing: .005em; }
+    .top .tag { color: var(--muted); font-size: 11.5px; }
+    .top .grow { flex: 1; min-width: 0; }
+
+    /* düğmeler */
     button {
       font: inherit;
-      margin: 0 6px 8px 0;
-      padding: 6px 10px;
       cursor: pointer;
       border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--card);
+      border-radius: 8px;
+      background: var(--surface);
       color: var(--text);
+      padding: 7px 12px;
+      transition: background .12s, border-color .12s, filter .12s;
     }
-    button:hover { background: var(--off-bg); }
-    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-    button.primary:hover { filter: brightness(1.08); }
-    ul {
-      list-style: none;
-      margin: 0 0 10px;
-      padding: 0;
-      max-height: 160px;
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--card);
+    button:hover:not(:disabled) { background: var(--hover); }
+    button:focus-visible, summary:focus-visible, textarea:focus-visible, input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
     }
-    li {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      padding: 6px 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    li:last-child { border-bottom: 0; }
-    .meta { color: var(--muted); font-size: 12px; word-break: break-all; }
-    label { display: block; margin-bottom: 4px; }
-    textarea {
-      width: 100%;
-      min-height: 72px;
-      margin-bottom: 8px;
-      font: 12px/1.35 ui-monospace, monospace;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--card);
-      color: var(--text);
-    }
-    #status { min-height: 2.6em; white-space: pre-wrap; }
-    .empty { color: var(--muted); padding: 8px; }
+    button:disabled { opacity: .45; cursor: default; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+    button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+    button.block { width: 100%; }
+    button.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 5px 8px; }
+    button.ghost:hover:not(:disabled) { color: var(--text); }
+    button.small { padding: 4px 9px; font-size: 12px; }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
 
-    /* canlı durum kartı */
-    .brand { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
-    .brand img { width: 32px; height: 32px; border-radius: 8px; }
-    .brand .name { font-size: 17px; font-weight: 700; letter-spacing: .01em; }
-    .brand .tag { color: var(--muted); font-size: 11px; }
-    .live {
-      background: var(--card);
+    /* kartlar */
+    .card {
+      background: var(--surface);
       border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px 12px 4px;
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-bottom: 10px;
     }
-    .live-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--off); margin-right: 6px; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .meta { color: var(--muted); font-size: 11.5px; word-break: break-all; }
+
+    /* canlı durum */
+    .dot { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--off); }
     .dot.on { background: var(--good); box-shadow: 0 0 0 3px var(--good-bg); }
     .dot.warn { background: #f29900; box-shadow: 0 0 0 3px var(--warn-bg); }
     .dot.bad { background: #d93025; box-shadow: 0 0 0 3px var(--bad-bg); }
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-    .chip { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--off-bg); color: var(--off); }
-    .chip.good { background: var(--good-bg); color: var(--good); }
-    .chip.warn { background: var(--warn-bg); color: var(--warn); }
-    .chip.bad { background: var(--bad-bg); color: var(--bad); }
-    ul.live-list { max-height: 190px; border: 0; background: none; margin: 0 0 6px; }
-    ul.live-list li {
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
+    .stat { padding: 7px 4px; border-radius: 8px; background: var(--off-bg); text-align: center; }
+    .stat b { display: block; font-size: 17px; line-height: 1.15; font-weight: 650; }
+    .stat span { display: block; margin-top: 1px; font-size: 10.5px; color: var(--muted); }
+    .stat.good { background: var(--good-bg); }
+    .stat.good b { color: var(--good); }
+    .stat.bad { background: var(--bad-bg); }
+    .stat.bad b { color: var(--bad); }
+    .stat.warn { background: var(--warn-bg); }
+    .stat.warn b { color: var(--warn); }
+
+    ul { list-style: none; margin: 0; padding: 0; }
+    .live-list { max-height: 168px; overflow: auto; margin-top: 6px; }
+    .live-list li {
       display: grid;
       grid-template-columns: 1fr auto;
-      gap: 2px 8px;
-      padding: 6px 0;
+      gap: 3px 8px;
+      padding: 8px 0;
+      border-top: 1px solid var(--line);
     }
+    .live-list li.goto { cursor: pointer; margin: 0 -6px; padding: 8px 6px; border-radius: 6px; }
+    .live-list li.goto:hover, .live-list li.goto:focus-visible { background: var(--hover); }
     .row-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .badge { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; align-self: start; }
+    .row-meta { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
+    .badge { align-self: start; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
     .b-good { background: var(--good-bg); color: var(--good); }
     .b-warn { background: var(--warn-bg); color: var(--warn); }
     .b-bad { background: var(--bad-bg); color: var(--bad); }
     .b-info { background: var(--info-bg); color: var(--info); }
     .b-off { background: var(--off-bg); color: var(--off); }
-    .bar { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--off-bg); overflow: hidden; }
-    .bar > i { display: block; height: 100%; background: var(--info); }
-    .row-meta { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
-    .live-actions { margin-top: 4px; }
+    .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--off-bg); overflow: hidden; }
+    .bar > i { display: block; height: 100%; background: var(--info); border-radius: 2px; }
+    .empty { padding: 10px 0 4px; color: var(--muted); font-size: 12px; text-align: center; }
+
+    /* eğitim listesi */
+    .list-head { display: flex; align-items: center; justify-content: space-between; margin: 10px 0 4px; }
+    .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); flex: none; }
+    #links { max-height: 176px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; }
+    #links li { border-bottom: 1px solid var(--line); }
+    #links li:last-child { border-bottom: 0; }
+    #links li.empty { border-bottom: 0; padding: 14px 8px; }
+    #links label { display: flex; align-items: flex-start; gap: 8px; padding: 7px 9px; cursor: pointer; }
+    #links label:hover { background: var(--hover); }
+    #links .t { font-weight: 550; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    #links .grow { min-width: 0; }
+
+    /* gelişmiş */
+    details { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin-bottom: 10px; }
+    summary { cursor: pointer; padding: 10px 12px; font-weight: 600; color: var(--muted); list-style: none; display: flex; justify-content: space-between; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "›"; transition: transform .15s; font-size: 16px; line-height: 1; }
+    details[open] summary::after { transform: rotate(90deg); }
+    details[open] summary { color: var(--text); }
+    .adv { padding: 2px 12px 12px; display: grid; gap: 10px; }
+    .adv label.field { display: block; margin-bottom: 4px; font-size: 12px; color: var(--muted); }
+    textarea {
+      width: 100%;
+      min-height: 60px;
+      resize: vertical;
+      padding: 7px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: 11.5px/1.4 ui-monospace, "Cascadia Mono", monospace;
+    }
+    #slots li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+    #slots li:last-child { border-bottom: 0; }
+    #slots li.empty { justify-content: center; padding: 6px 0; }
+
+    #status { min-height: 1.4em; padding: 0 2px; font-size: 12px; color: var(--muted); white-space: pre-wrap; }
   </style>
 </head>
 <body>
-  <div class="brand">
+  <header class="top">
     <img src="icons/icon-48.png" alt="">
-    <div>
+    <div class="grow">
       <div class="name">egitimSavar</div>
-      <div class="tag">Eğitimleri senin yerine izler, ilerletir, raporlar</div>
+      <div class="tag">Eğitimleri izler, ilerletir, raporlar</div>
     </div>
-  </div>
+    <button id="open-report" type="button" class="small">Rapor</button>
+  </header>
 
-  <section class="live" aria-label="Canlı durum">
-    <div class="live-head">
-      <h1><span id="live-dot" class="dot"></span>Canlı durum</h1>
+  <section class="card" aria-label="Canlı durum">
+    <div class="card-head">
+      <h2><span id="live-dot" class="dot"></span>Canlı durum</h2>
       <span id="live-updated" class="meta"></span>
     </div>
-    <div id="live-chips" class="chips"></div>
+    <div id="live-chips" class="stats"></div>
     <ul id="live-list" class="live-list"><li class="empty">Yükleniyor…</li></ul>
-    <div class="live-actions">
-      <button id="open-report" type="button" class="primary">Ayrıntılı raporu aç</button>
-    </div>
   </section>
 
-  <h2>Ekranlar</h2>
-  <p>Her monitörde bu pencereyi o ekrana getirip kaydedin. Seçilen eğitimler ayrı pencerede açılır ve otomatik ilerler. Bitince pencereyi kapatın; sıradaki aynı ekranda açılır.</p>
-  <button id="save-screen" type="button">Bu ekranı kaydet</button>
-  <ul id="slots"><li class="empty">Kayıtlı ekran yok.</li></ul>
+  <section class="card" aria-label="Eğitimler">
+    <div class="card-head">
+      <h2>Eğitimler</h2>
+      <button id="scan" type="button" class="small">Sayfadan bul</button>
+    </div>
+    <div class="list-head" id="list-head" hidden>
+      <label class="check"><input id="select-all" type="checkbox" checked> <span id="select-label">Tümünü seç</span></label>
+    </div>
+    <ul id="links"><li class="empty">Henüz liste yok. Eğitim listesi sayfasında “Sayfadan bul”a basın.</li></ul>
+    <button id="start-tabs" type="button" class="primary block" disabled>Eş zamanlı başlat</button>
+    <p style="margin-top:8px">İşaretli her eğitim ayrı sekmede açılır ve birbirinden bağımsız ilerler.</p>
+  </section>
 
-  <h2>Eğitimler</h2>
-  <button id="scan" type="button">Bu sayfadaki eğitimleri bul</button>
-  <ul id="links"><li class="empty">Henüz liste yok.</li></ul>
-  <p>İşaretli her eğitim ayrı sekmede açılır ve kendi kendine, diğerlerinden bağımsız ilerler.</p>
-  <button id="start-tabs" type="button" class="primary">Eş zamanlı başlat</button>
+  <details>
+    <summary>Gelişmiş</summary>
+    <div class="adv">
+      <div>
+        <label class="field" for="manual">Bağlantı yapıştır</label>
+        <textarea id="manual" placeholder="https://uzaktanegitimkapisi.gov.tr/Egitimler/ScormV2?Uniq=..."></textarea>
+      </div>
+      <div>
+        <label class="field">Ekranlar (çoklu monitör)</label>
+        <p style="margin-bottom:6px">Pencereyi bir monitöre getirip kaydedin; eğitimler her ekranda ayrı pencerede açılır.</p>
+        <ul id="slots"><li class="empty">Kayıtlı ekran yok.</li></ul>
+        <button id="save-screen" type="button" class="small" style="margin-top:6px">Bu ekranı kaydet</button>
+      </div>
+      <div class="row">
+        <button id="open" type="button">Ekranlara dağıt</button>
+        <button id="clear-queue" type="button">Sırayı temizle</button>
+      </div>
+    </div>
+  </details>
 
-  <label for="manual">Bağlantı yapıştır</label>
-  <textarea id="manual" placeholder="https://uzaktanegitimkapisi.gov.tr/Egitimler/ScormV2?Uniq=..."></textarea>
-
-  <button id="open" type="button">Seçilenleri ekranlara dağıt</button>
-  <button id="clear-queue" type="button">Sırayı temizle</button>
-  <p id="status"></p>
+  <p id="status" role="status" aria-live="polite"></p>
 
   <script src="shared.js"></script>
   <script src="report-core.js"></script>

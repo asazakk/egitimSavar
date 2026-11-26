@@ -342,6 +342,12 @@ async function openInTabs(message) {
   let opened = 0;
   let failed = 0;
   const openedUrls = new Set();
+  const openedTabIds = [];
+  let returnTo = null;
+  try {
+    const [current] = await api.tabs.query({ active: true, currentWindow: true });
+    if (current && current.id != null) returnTo = current.id;
+  } catch (_) { /* ignore */ }
   for (const item of fresh) {
     try {
       const tab = await api.tabs.create({ url: item.url, active: false });
@@ -367,6 +373,7 @@ async function openInTabs(message) {
         text: 'Sekme açıldı',
       });
       openedUrls.add(item.url);
+      openedTabIds.push(tab.id);
       opened += 1;
     } catch (e) {
       failed += 1;
@@ -376,7 +383,29 @@ async function openInTabs(message) {
   if (openedUrls.size) {
     await writeMap(map, queue.filter((entry) => !openedUrls.has(entry.url)));
   }
+  if (openedTabIds.length) warmUpTabs(openedTabIds, returnTo).catch(() => {});
   return { opened, skipped, failed };
+}
+
+const WARMUP_MS = 900;
+
+/**
+ * Arka planda açılan sekmede tarayıcı medyanın otomatik başlamasını, sekme ilk kez görünür
+ * olana kadar engelleyebiliyor (Firefox: media.block-autoplay-until-in-foreground; Chrome:
+ * hiç görünmemiş sekme). Her sekmeyi kısa süre öne alıp kullanıcının sekmesine dönülür.
+ */
+async function warmUpTabs(tabIds, returnTo) {
+  for (const id of tabIds) {
+    try {
+      await api.tabs.update(id, { active: true });
+      await new Promise((resolve) => setTimeout(resolve, WARMUP_MS));
+    } catch (_) { /* sekme kapanmış olabilir */ }
+  }
+  if (returnTo != null) {
+    try {
+      await api.tabs.update(returnTo, { active: true });
+    } catch (_) { /* ignore */ }
+  }
 }
 
 async function createPlayerWindow(item, bounds) {
@@ -575,6 +604,71 @@ async function stopAll() {
   return { stopped };
 }
 
+function uniqKey(url) {
+  try {
+    const u = new URL(url);
+    return (u.searchParams.get('Uniq') || u.searchParams.get('uniq') || u.origin + u.pathname).toLowerCase();
+  } catch (_) {
+    return String(url || '').toLowerCase();
+  }
+}
+
+async function focusTab(tab) {
+  await api.tabs.update(tab.id, { active: true });
+  try {
+    await api.windows.update(tab.windowId, { focused: true });
+  } catch (_) { /* ignore */ }
+}
+
+/**
+ * Bir eğitim oturumunun sekmesine/penceresine geç. Sıra: sekme kimliği → penceredeki UEK sekmesi
+ * → adresi (Uniq) eşleşen herhangi bir sekme → yoksa adresi yeni sekmede aç.
+ */
+async function focusSession(message) {
+  const { tabId, windowId, url } = message;
+
+  if (tabId != null) {
+    try {
+      const tab = await api.tabs.get(tabId);
+      if (tab) {
+        await focusTab(tab);
+        return { ok: true, how: 'tab' };
+      }
+    } catch (_) { /* sekme kapanmış */ }
+  }
+
+  let all = [];
+  try {
+    all = await api.tabs.query({});
+  } catch (_) {
+    all = [];
+  }
+
+  if (url) {
+    const key = uniqKey(url);
+    const match = all.find((tab) => tab.url && uniqKey(tab.url) === key);
+    if (match) {
+      await focusTab(match);
+      return { ok: true, how: 'url' };
+    }
+  }
+
+  if (windowId != null) {
+    const inWindow = all.filter((tab) => tab.windowId === windowId);
+    const pick = inWindow.find((tab) => tab.active) || inWindow[0];
+    if (pick) {
+      await focusTab(pick);
+      return { ok: true, how: 'window' };
+    }
+  }
+
+  if (url) {
+    await api.tabs.create({ url, active: true });
+    return { ok: true, how: 'opened' };
+  }
+  return { ok: false };
+}
+
 /**
  * Chrome, dinleyiciden dönen Promise'i yanıt olarak kabul etmez; sendResponse + `return true`
  * kullanılmalı. Firefox her iki yolu da destekler, bu yüzden tek yöntem kullanılır.
@@ -638,6 +732,10 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const player = !!(map[String(windowId)] || (tabId != null && tabs[String(tabId)]));
       return { player };
     });
+  }
+
+  if (message.type === 'uek-focus-session') {
+    return respondAsync(sendResponse, () => focusSession(message));
   }
 
   if (message.type === 'uek-open-tabs') {

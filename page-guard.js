@@ -137,6 +137,141 @@
     }
   } catch (_) { /* ignore */ }
 
+  // 6) Zamanlayıcı kısıtlaması: gizli sekmede setTimeout/setInterval en az 1 sn'ye (Firefox'ta
+  //    bütçe aşılınca çok daha uzuna, Chrome'da 5 dk sonra dakikada 1'e) çekilir. Worker
+  //    zamanlayıcıları kısılmaz; sekme gizliyken sayfanın zamanlayıcıları worker saatine verilir.
+  //    Görünürken yerel zamanlayıcılar aynen kullanılır. Worker kurulamazsa (CSP vb.) hiçbir
+  //    şey değiştirilmez.
+  const nativeSetTimeout = window.setTimeout.bind(window);
+  const nativeClearTimeout = window.clearTimeout.bind(window);
+  const nativeSetInterval = window.setInterval.bind(window);
+  const nativeClearInterval = window.clearInterval.bind(window);
+
+  let clockWorker = null;
+  let clockBroken = false;
+  try {
+    const src = 'const t=new Map();'
+      + 'onmessage=(e)=>{const d=e.data;'
+      + 'if(d.op==="set"){t.set(d.id,setTimeout(()=>{t.delete(d.id);postMessage(d.id);},d.delay));}'
+      + 'else if(d.op==="clear"){clearTimeout(t.get(d.id));t.delete(d.id);}};';
+    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    clockWorker = new Worker(url);
+    URL.revokeObjectURL(url);
+  } catch (_) {
+    clockWorker = null;
+  }
+
+  if (clockWorker) {
+    const timers = new Map(); // id -> { cb, args, delay, repeat, due, native, viaWorker }
+    let nextId = 1 << 30;
+
+    const workerUsable = () => !clockBroken && realHidden();
+
+    function schedule(id, entry, delay) {
+      entry.due = Date.now() + delay;
+      if (workerUsable()) {
+        entry.viaWorker = true;
+        entry.native = 0;
+        clockWorker.postMessage({ op: 'set', id, delay });
+      } else {
+        entry.viaWorker = false;
+        entry.native = nativeSetTimeout(() => fire(id), delay);
+      }
+    }
+
+    function fire(id) {
+      const entry = timers.get(id);
+      if (!entry) return;
+      if (entry.repeat) schedule(id, entry, entry.delay);
+      else timers.delete(id);
+      try {
+        entry.cb.apply(window, entry.args);
+      } catch (e) {
+        // sayfanın kendi hatası; zamanlayıcı döngüsünü bozmasın
+        nativeSetTimeout(() => { throw e; }, 0);
+      }
+    }
+
+    function add(cb, delay, args, repeat) {
+      const id = ++nextId;
+      const entry = { cb, args, delay: Math.max(0, Number(delay) || 0), repeat, due: 0, native: 0, viaWorker: false };
+      timers.set(id, entry);
+      schedule(id, entry, entry.delay);
+      return id;
+    }
+
+    function remove(id) {
+      const entry = timers.get(id);
+      if (!entry) return false;
+      timers.delete(id);
+      if (entry.viaWorker) clockWorker.postMessage({ op: 'clear', id });
+      else nativeClearTimeout(entry.native);
+      return true;
+    }
+
+    clockWorker.onmessage = (ev) => fire(ev.data);
+    clockWorker.onerror = () => {
+      // worker çalışmıyor (CSP vb.): bekleyenleri yerel zamanlayıcıya geri ver
+      clockBroken = true;
+      timers.forEach((entry, id) => {
+        if (!entry.viaWorker) return;
+        entry.viaWorker = false;
+        entry.native = nativeSetTimeout(() => fire(id), Math.max(0, entry.due - Date.now()));
+      });
+    };
+
+    window.setTimeout = function egitimSavarSetTimeout(cb, delay, ...args) {
+      if (typeof cb !== 'function') return nativeSetTimeout(cb, delay, ...args);
+      return add(cb, delay, args, false);
+    };
+    window.setInterval = function egitimSavarSetInterval(cb, delay, ...args) {
+      if (typeof cb !== 'function') return nativeSetInterval(cb, delay, ...args);
+      return add(cb, delay, args, true);
+    };
+    window.clearTimeout = function egitimSavarClearTimeout(id) {
+      if (!remove(id)) nativeClearTimeout(id);
+    };
+    window.clearInterval = function egitimSavarClearInterval(id) {
+      if (!remove(id)) nativeClearInterval(id);
+    };
+
+    // Sekme gizlenince yerel (kısılacak) bekleyenleri worker saatine taşı
+    window.addEventListener('visibilitychange', () => {
+      if (!workerUsable()) return;
+      timers.forEach((entry, id) => {
+        if (entry.viaWorker) return;
+        nativeClearTimeout(entry.native);
+        schedule(id, entry, Math.max(0, entry.due - Date.now()));
+      });
+    }, true);
+
+    // İçerik betiğine kısılmayan bir saat: gizliyken ~500 ms'de bir "tick"
+    const driver = () => {
+      if (realHidden()) notify({ kind: 'tick' });
+      add(driver, 500, [], false);
+    };
+    add(driver, 500, [], false);
+  }
+
+  // 7) Sessiz bir AudioContext: Firefox/Chrome çalışan ses bağlamı olan sayfayı kısmaya daha
+  //    isteksiz. Kullanıcı etkileşimi olmadan "suspended" kalır; zararsızdır.
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const ctx = new AC();
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const osc = ctx.createOscillator();
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      const wake = () => {
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      };
+      ['pointerdown', 'keydown', 'click'].forEach((type) => window.addEventListener(type, wake, true));
+      wake();
+    }
+  } catch (_) { /* ignore */ }
+
   // İlk durumu bildir (sayfa arka planda açılmış olabilir) ve hazır olduğunu söyle
   notify({ kind: 'ready' });
   report(realHidden());
