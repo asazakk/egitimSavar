@@ -1,0 +1,14 @@
+---
+description: Her kod değişikliğinde README sürüm notlarını güncelle
+alwaysApply: true
+---
+
+# README sürüm notları
+
+Bu projede kod, manifest veya davranış değiştiren her iş için `README.md` içindeki `## Sürüm notları` bölümünü de güncelle.
+
+- `manifest.json` içindeki `version` değiştiyse, o sürüm için yeni bir `<details>` bloğu ekle. Blok, bölümün en üstünde ve en yeni sürüm önce olacak şekilde yer alsın.
+- Blok biçimi mevcut örneği izlesin: `<summary><b>SÜRÜM</b> · kısa başlık</summary>`, altında Türkçe madde işaretleri.
+- Sürüm numarası değişmediyse ama önemli bir değişiklik yapıldıysa, en üstteki sürüm bloğuna madde ekle.
+- Notları `git log` ve `git show` çıktısından çıkar; tahmin etme.
+- Yalnızca README'yi değiştiriyorsan, sürüm notu gerekmez.

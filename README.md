@@ -77,6 +77,43 @@ npx web-ext build --source-dir .
 ## Sürüm notları
 
 <details>
+<summary><b>1.7.2</b> · açılan videolar tam sesle çalmıyor</summary>
+
+- Yeni açılan video varsayılan sesle (1) başlıyor ve sayfa sesi tekrar yükseltiyordu. Artık sayfa dünyasında ses zorlanır: öndeki sekmede 0, arkadaki sekmede en fazla 0.02
+- Storyline `SetVolume` ve Video.js aynı politikayla kısılır
+- Video eklendiğinde (MutationObserver, `play` olayı, 400 ms tarama) politika hemen uygulanır
+
+</details>
+
+<details>
+<summary><b>1.7.1</b> · bitmiş eğitimin sekmesi kapanır</summary>
+
+- Eğitim bitince (kabukta “tekrar katıl” ya da tamamlandı yazısı, tüm üniteler işaretli ya da video bitip sıradaki ders yok) birkaç saniye doğrulanır ve eklentinin açtığı sekme kapanır. Devam eden eğitimlere dokunulmaz
+- Gizli sekmede sessiz video durmasın diye ses kısık (0.02) tutulur; tarayıcının `pause()` çağrısı hemen geri alınır. Kare pompası worker saatinde çalışır
+- Katalog taramasında bitmiş görünen eğitimler işaretsiz gelir; açık sekmeye düşerlerse kapanır
+
+</details>
+
+<details>
+<summary><b>1.7.0</b> · oturum ve sekme yönetimi</summary>
+
+- Rapor ekranına **Sekmeye git** düğmesi eklendi. Sekme kimliği, pencere veya adres (`Uniq`) ile bulunur; sekme yoksa adresi yeni sekmede açılır
+- Yeni açılan sekmeler kısa süre öne alınır (tarayıcı medyayı engellemesin diye), ardından kullanıcının sekmesine dönülür
+- Gizli sekmede zamanlayıcılar kısıtlanmaz; `page-guard` zamanlayıcıları worker saatine taşır, ses bağlamı sessiz tutulur
+- Popup’ta eğitim seçimi ve bağlantı işaretleme iyileştirildi
+
+</details>
+
+<details>
+<summary><b>1.6.3</b> · sekmede eş zamanlı başlatma</summary>
+
+- Popup’a **Eş zamanlı başlat** eklendi: işaretli her eğitim ayrı sekmede açılır ve diğerlerinden bağımsız ilerler
+- Eklentinin açtığı sekmeler takip edilir; sekme kapanınca rapora yansır
+- Zaten açık olan eğitimler tekrar açılmaz
+
+</details>
+
+<details>
 <summary><b>1.6.2</b> · arka plan oynatma, yeni simge</summary>
 
 - Sekme değişince eğitimin durması giderildi: `hasFocus()` yoklaması, arka planda duran `requestAnimationFrame` ve Chrome'un zamanlayıcı kısıtlaması ele alındı

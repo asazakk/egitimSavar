@@ -194,6 +194,16 @@ globalThis.UEK_FINDINGS = [
     fix: 'Sayfa dünyasında volume ve muted atamaları zorlanır: öndeki sekmede ses 0, gizli sekmede tavan 0.02. Oynatma başında ve düzenli taramada mevcut videolara da uygulanır. GetPlayer().SetVolume ve Video.js aynı politikayla sayfa dünyasından kısılır.',
   },
   {
+    id: 'F20',
+    severity: 'high',
+    status: 'fixed',
+    file: 'content.js / background.js / page-guard.js',
+    title: 'Sekmeler açılıyor ama eğitim kendiliğinden başlamıyordu',
+    problem:
+      'Eş zamanlı başlat, eğitim kabuğunu (Eğitime Başla / Devam Et) açıp bırakıyordu. Oynatıcıya geçiş yalnız sayfada tek bir doğrudan video adresi varsa ve ilk 6 saniyede bulunursa yapılıyordu; düğme veya ders listesi tıklanmıyordu. Isınma da sayfa yüklenmeden 0,9 sn sürüyordu. Gizli sekmede video daha başlamadan sesli play() çağrısı tarayıcı tarafından reddediliyordu.',
+    fix: 'Eklentinin açtığı sekmede "Eğitime Başla / Devam Et / Katıl" ya da ilk bitmemiş ders otomatik açılıyor. Sekme, sayfa yüklenip adres oturana kadar önde kalıyor. Video ilerleyene kadar sessiz başlatılıyor; ilerleyince arka planda ses 0.02 ile sınırlanıyor.',
+  },
+  {
     id: 'N01',
     severity: 'low',
     status: 'note',

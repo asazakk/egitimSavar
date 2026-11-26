@@ -75,6 +75,8 @@
     finishReason: '',
     finishSince: 0,
     finishPollAt: 0,
+    managedTab: false,
+    lastStartClickAt: 0,
     messageListener: null,
     intervals: [],
     timeouts: [],
@@ -334,11 +336,22 @@
     return document.hidden || visibility.hidden;
   }
 
+  function mediaRolling(el) {
+    return !!(el && !el.ended && !el.paused && (el.currentTime || 0) > 0.2);
+  }
+
   function keepAliveElement(el) {
     try {
+      // Henüz başlamamış videoyu gizli sekmede sesli açmak tarayıcının play() çağrısını reddeder.
+      // Önce sessiz başlar; ilerledikten sonra kısık sese geçilir.
+      if (!mediaRolling(el)) {
+        el.muted = true;
+        el.volume = 0;
+        el.setAttribute('muted', 'true');
+        return;
+      }
       el.muted = false;
       el.removeAttribute('muted');
-      // Varsayılan ses 1'dir. Yalnızca alttan yükseltmek tam sesi yerinde bırakıyordu.
       el.volume = KEEPALIVE_VOLUME;
     } catch (_) { /* ignore */ }
   }
@@ -1484,9 +1497,61 @@
     sendToBackground({ type: 'uek-course-finished', reason });
   }
 
+  function isAlreadyPlayerPage() {
+    return /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(location.pathname)
+      || !!document.querySelector('#ScoFrame, #CbikoPl, .video-js');
+  }
+
+  /**
+   * Katalogdan açılan sekme çoğu zaman oynatıcı değil, "Eğitime Başla / Devam Et" kabuğudur.
+   * Bu düğme basılmadan video hiç oluşmaz.
+   */
+  function clickCourseStart() {
+    if (window !== window.top || !state.managedTab || state.stopped) return false;
+    if (isAlreadyPlayerPage()) return false;
+    const now = Date.now();
+    if (now - state.lastStartClickAt < 1500) return false;
+
+    const startRe = /egitime basla|egitimi baslat|egitime devam et|egitime katil|izlemeye basla|derse basla|egitime gir/;
+    const controls = queryDeepAll('a, button, input[type="button"], input[type="submit"], [role="button"]');
+    for (const el of controls) {
+      if (!visible(el) || !looksEnabled(el) || isDangerousNav(el)) continue;
+      const label = fold(`${controlLabel(el)} ${el.value || ''}`);
+      if (!label || label.length > 90 || /tekrar katil/.test(label)) continue;
+      if (!startRe.test(label)) continue;
+      const href = (el.href || (el.getAttribute && el.getAttribute('href')) || '');
+      state.lastStartClickAt = now;
+      ok('Eğitim başlatılıyor:', label.slice(0, 80));
+      if (href && globalThis.UEKLinks && UEKLinks.isDirectPlayerUrl(href)) {
+        location.assign(href);
+        return true;
+      }
+      return softClick(el);
+    }
+
+    const links = queryDeepAll('a[href]');
+    for (const el of links) {
+      const href = el.href || '';
+      if (!globalThis.UEKLinks || !UEKLinks.isDirectPlayerUrl(href) || href === location.href) continue;
+      if (!visible(el) || isDangerousNav(el)) continue;
+      const card = el.closest ? el.closest('li, tr, article, .card, .list-group-item') : null;
+      const cardText = fold((card || el).innerText || '');
+      if (/tamamland|tekrar katil/.test(cardText) && !/devam et/.test(cardText)) continue;
+      if (lessonMarkedDone(el)) continue;
+      state.lastStartClickAt = now;
+      ok('İlk derse giriliyor.');
+      location.assign(href);
+      return true;
+    }
+    return false;
+  }
+
   function tick() {
     muteAll();
     pollFinished();
+    if (window === window.top && state.managedTab && !isAlreadyPlayerPage()) {
+      clickCourseStart();
+    }
 
     // Parent frame: yalnızca dar kapsamlı "izlemeye devam" modalı
     if (state.mode === 'parent') {
@@ -1766,37 +1831,21 @@
   trackInterval(sendHeartbeat, CONFIG.heartbeatMs);
   sendHeartbeat();
 
-  function isAlreadyPlayerPage() {
-    return /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(location.pathname)
-      || !!document.querySelector('#ScoFrame, #CbikoPl');
-  }
-
-  async function enterPlayerIfNeeded() {
-    if (window !== window.top || !globalThis.UEKLinks) return;
-    let misses = 0;
-    for (let i = 0; i < 8; i += 1) {
-      if (state.stopped || isAlreadyPlayerPage()) return;
-      let res;
+  async function detectManagedTab() {
+    if (window !== window.top) return;
+    for (let i = 0; i < 4; i += 1) {
+      if (state.stopped) return;
       try {
-        res = await extApi.runtime.sendMessage({ type: 'uek-am-i-player-window' });
+        const res = await extApi.runtime.sendMessage({ type: 'uek-am-i-player-window' });
+        if (res && res.player) {
+          state.managedTab = true;
+          clickCourseStart();
+          return;
+        }
       } catch (_) {
         return;
       }
-      if (!res || !res.player) {
-        misses += 1;
-        if (misses >= 3) return;
-        await new Promise((resolve) => setTimeout(resolve, 700));
-        continue;
-      }
-      const players = UEKLinks.collectFromDocument(document)
-        .filter((item) => UEKLinks.isDirectPlayerUrl(item.url));
-      if (players.length > 1) return;
-      if (players.length === 1 && players[0].url !== location.href) {
-        log('Oynatıcı penceresi — eğitime giriliyor.');
-        location.assign(players[0].url);
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
 
@@ -1819,7 +1868,7 @@
   extApi.runtime.onMessage.addListener(state.messageListener);
 
   if (window === window.top) {
-    enterPlayerIfNeeded();
+    detectManagedTab();
   }
 
   window.__uekExt = {

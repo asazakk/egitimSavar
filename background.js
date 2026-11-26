@@ -387,18 +387,47 @@ async function openInTabs(message) {
   return { opened, skipped, failed };
 }
 
-const WARMUP_MS = 900;
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
- * Arka planda açılan sekmede tarayıcı medyanın otomatik başlamasını, sekme ilk kez görünür
- * olana kadar engelleyebiliyor (Firefox: media.block-autoplay-until-in-foreground; Chrome:
- * hiç görünmemiş sekme). Her sekmeyi kısa süre öne alıp kullanıcının sekmesine dönülür.
+ * Sekme açılır açılmaz 1 sn görünüp kapanırsa sayfa daha "Başla" düğmesini çizmeden
+ * arka plana düşer ve tarayıcı oynatmayı başlatmaz. Yükleme bitene ve adres oturana
+ * kadar sekme önde kalır; kabuk sayfasında başlatma tıklaması da bu sırada yapılır.
  */
+async function waitUntilCourseReady(tabId) {
+  const deadline = Date.now() + 28000;
+  let lastUrl = '';
+  let stableSince = 0;
+  while (Date.now() < deadline) {
+    let tab;
+    try {
+      tab = await api.tabs.get(tabId);
+    } catch (_) {
+      return;
+    }
+    const url = tab.url || '';
+    const complete = tab.status === 'complete' && url && !/^about:/i.test(url);
+    if (complete && url === lastUrl) {
+      if (!stableSince) stableSince = Date.now();
+      const onPlayer = /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(url)
+        || /story\.html/i.test(url);
+      const holdMs = onPlayer ? 2200 : 4000;
+      if (Date.now() - stableSince >= holdMs) return;
+    } else {
+      lastUrl = url;
+      stableSince = 0;
+    }
+    await sleep(250);
+  }
+}
+
 async function warmUpTabs(tabIds, returnTo) {
   for (const id of tabIds) {
     try {
       await api.tabs.update(id, { active: true });
-      await new Promise((resolve) => setTimeout(resolve, WARMUP_MS));
+      await waitUntilCourseReady(id);
     } catch (_) { /* sekme kapanmış olabilir */ }
   }
   if (returnTo != null) {
