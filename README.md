@@ -5,7 +5,7 @@
 <h1 align="center">egitimSavar</h1>
 
 <p align="center">
-  Uzaktan Eğitim Kapısı videolarını senin yerine izler.<br>
+  Uzaktan Eğitim Kapısı ve Udemy videolarını senin yerine izler.<br>
   <b>Firefox 128+</b> · <b>Chrome 111+</b>
 </p>
 
@@ -13,12 +13,22 @@
 
 ## Ne yapar
 
-- Videoyu hızlandırır, sesi kapatır, **İLERİ**'ye basar
-- Video içi **Gönder** ve “izlemeye devam” ekranlarını geçer
+- **Uzaktan Eğitim Kapısı** (SCORM/Storyline + Video.js) ve **Udemy / Udemy Business** (`*.udemy.com`) destekler
+- Videoyu hızlandırır, sesi kapatır, sonraki slayt/derse geçer
+- UEK'te **Gönder**, **Sıra Sizde** ve “izlemeye devam” ekranlarını; Udemy'de değerlendirme penceresini, makale derslerini ve “sonraki ders” ekranlarını geçer
 - Sekme arkadayken de oynatmaya devam eder
-- Gerçek sınavda durur; cevap sende
-- Birden fazla monitöre eğitim dağıtır
-- Canlı durumu simgede ve raporda gösterir
+- Gerçek sınav ve Udemy quiz/alıştırmalarında durur; cevap sende
+- Birden fazla monitöre veya sekmeye eğitim dağıtır
+- Canlı durumu simgede, sekmede ve raporda gösterir
+
+## Platform mimarisi
+
+Platforma özgü kurallar çekirdek motordan ayrılmıştır:
+
+- `platforms.js` — alan adı, URL sınıflandırma, katalog/oturum anahtarı ve adaptör kayıt defteri
+- `adapters/uek.js` — Uzaktan Eğitim Kapısı adaptörü (SCORM/Storyline + Video.js)
+- `adapters/udemy.js` — Udemy & Udemy Business adaptörü (SPA video/makale/interstitial/quiz/tamamlama)
+- `content.js` — platformdan bağımsız oynatma, raporlama, odak koruması ve sekme simgesi motoru
 
 ## Kurulum
 
@@ -75,6 +85,17 @@ npx web-ext build --source-dir .
 `web-ext-artifacts/` içindeki `.zip` dosyasını `.xpi` yap → `about:addons` → dişli → **Dosyadan eklenti yükle…**. İmzasız paket reddedilirse AMO'da imzalat.
 
 ## Sürüm notları
+
+<details>
+<summary><b>1.8.0</b> · çoklu platform mimarisi ve Udemy desteği</summary>
+
+- Platform kayıt defteri (`platforms.js`) ve adaptör mimarisi (`adapters/uek.js`, `adapters/udemy.js`) kuruldu; `content.js` platformdan bağımsız çekirdek motora ayrıldı
+- Uzaktan Eğitim Kapısı davranışı (SCORM/Storyline, Video.js, Sıra Sizde, Gönder, Ctrl+Alt+.) `adapters/uek.js` altında birebir korundu
+- Udemy ve Udemy Business (`udemy.com`, `*.udemy.com`) desteği eklendi: SPA ders takibi, 4x sessiz oynatma, arka planda oynatma koruması, interstitial / sonraki ders geçişi, makale dersleri, değerlendirme penceresini kapatma, quiz/alıştırma ekranında duraklatma ve %100 tamamlama tespiti
+- Katalog tarama, manuel bağlantı yapıştırma, sekme/pencere dağıtımı ve canlı rapor ekranları UEK ve Udemy için ortak çalışır; her oturumda platform etiketi görünür
+- `page-guard.js` Udemy'de yalnızca aktif `/learn/` oynatıcısında (quiz ve katalog dışı) medya koruması uygular
+
+</details>
 
 <details>
 <summary><b>1.7.8</b> · İLERİ kısayolu Ctrl+Alt+.</summary>

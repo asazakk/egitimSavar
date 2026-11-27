@@ -59,7 +59,9 @@
       title.title = item.title;
       const meta = document.createElement('div');
       meta.className = 'meta';
-      meta.textContent = item.done ? `Bitmiş · ${shortUrl(item.url)}` : shortUrl(item.url);
+      const plat = globalThis.EgitimPlatforms ? EgitimPlatforms.platformLabel(item.platform || item.url) : '';
+      const metaBits = [plat, item.done ? 'Bitmiş' : '', shortUrl(item.url)].filter(Boolean);
+      meta.textContent = metaBits.join(' · ');
       wrap.append(title, meta);
       label.append(box, wrap);
       li.append(label);
@@ -295,6 +297,7 @@
         li.append(bar);
       }
       const bits = [];
+      if (i.platformLabel) bits.push(i.platformLabel);
       if (i.pct != null) bits.push(`%${i.pct}`);
       if (i.slide) bits.push(`slayt ${i.slide}`);
       if (i.main && i.main.hasMedia) bits.push(`${i.main.rate}x${i.main.muted ? '' : ' · SES AÇIK'}`);

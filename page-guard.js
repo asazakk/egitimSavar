@@ -25,6 +25,15 @@
   const docProto = Document.prototype;
   const realHiddenGet = Object.getOwnPropertyDescriptor(docProto, 'hidden').get;
 
+  const isUdemyHost = /(?:^|\.)udemy\.com$/i.test(location.hostname || '');
+  const isUdemyLearnPage = () => /^\/course\/(?!draft(?:\/|$))[^/]+\/learn(\/|$)/i.test(location.pathname || '');
+  const isUdemyQuizPage = () => /\/learn\/(quiz|practice|coding-exercise)(\/|$)/i.test(location.pathname || '');
+  /** UEK'te her zaman etkin; Udemy'de yalnız aktif ders oynatıcısında (katalog/quiz hariç). */
+  function mediaGuardActive() {
+    if (!isUdemyHost) return true;
+    return window === window.top && isUdemyLearnPage() && !isUdemyQuizPage();
+  }
+
   function realHidden() {
     try {
       return !!realHiddenGet.call(document);
@@ -94,6 +103,7 @@
   }
 
   function applyMediaPolicy(el) {
+    if (!mediaGuardActive()) return;
     if (!isMediaEl(el) || el.ended) return;
     try {
       if (!el.muted) el.muted = true;
@@ -108,6 +118,7 @@
   }
 
   function holdPlaying(el) {
+    if (!mediaGuardActive()) return;
     if (!isMediaEl(el) || el.ended) return;
     applyMediaPolicy(el);
     if (!el.paused) return;
@@ -149,8 +160,33 @@
     } catch (_) { /* ignore */ }
   }
 
-  /** Ortadaki svg.play-icon / data-dv_ref="playIcon" ve Video.js oynat düğmesi. */
+  let lastUdemyStartClickAt = 0;
+
+  /** Ortadaki svg.play-icon / data-dv_ref="playIcon" ve Video.js / Udemy oynat düğmesi. */
   function clickStartControls() {
+    if (!mediaGuardActive()) return;
+    if (isUdemyHost) {
+      const now = Date.now();
+      if (now - lastUdemyStartClickAt < 1500) return;
+      const vid = document.querySelector('video');
+      if (vid && (!vid.paused || vid.ended)) return;
+      const btn = document.querySelector(
+        '[data-purpose="video-play-button-initial"], .vjs-big-play-button'
+      );
+      if (!btn) return;
+      let rect;
+      try {
+        rect = btn.getBoundingClientRect();
+      } catch (_) {
+        return;
+      }
+      if (rect.width < 24 || rect.height < 24) return;
+      lastUdemyStartClickAt = now;
+      try {
+        if (typeof btn.click === 'function') btn.click();
+      } catch (_) { /* ignore */ }
+      return;
+    }
     const sel = [
       '[data-dv_ref="playIcon"]',
       'svg.play-icon',
@@ -222,13 +258,14 @@
   }
 
   function applyAllMedia() {
+    if (!mediaGuardActive()) return;
     eachLightMedia(holdPlaying);
     clickStartControls();
     applyPlayerVolumes();
   }
 
   function keepBackgroundMedia() {
-    if (!realHidden()) return;
+    if (!realHidden() || !mediaGuardActive()) return;
     applyAllMedia();
   }
 
@@ -241,7 +278,7 @@
         enumerable: mutedDesc.enumerable,
         get() { return mutedDesc.get.call(this); },
         set(v) {
-          if (this.ended) {
+          if (this.ended || !mediaGuardActive()) {
             mutedDesc.set.call(this, v);
             return;
           }
@@ -255,7 +292,7 @@
         enumerable: volumeDesc.enumerable,
         get() { return volumeDesc.get.call(this); },
         set(v) {
-          if (this.ended) {
+          if (this.ended || !mediaGuardActive()) {
             volumeDesc.set.call(this, v);
             return;
           }
@@ -271,7 +308,7 @@
   }, true);
 
   HTMLMediaElement.prototype.pause = function egitimSavarPause(...args) {
-    if (realHidden() && !this.ended) {
+    if (realHidden() && !this.ended && mediaGuardActive()) {
       blockedCount += 1;
       notify({ kind: 'pause-blocked', count: blockedCount });
       holdPlaying(this);
@@ -282,7 +319,7 @@
 
   document.addEventListener('pause', (ev) => {
     const el = ev.target;
-    if (!realHidden() || !el || el.ended) return;
+    if (!realHidden() || !el || el.ended || !mediaGuardActive()) return;
     if (el.tagName !== 'VIDEO' && el.tagName !== 'AUDIO') return;
     holdPlaying(el);
   }, true);

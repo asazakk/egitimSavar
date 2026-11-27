@@ -143,7 +143,14 @@
       },
       h('td', null,
         h('div', { class: 'title', text: s.title || 'Eğitim' }),
-        h('div', { class: 'meta', text: `${s.tabId != null && s.id.startsWith('t') ? `Sekme #${s.tabId}` : `Pencere #${s.windowId}`}${s.managed ? ' · eklenti açtı' : ''}` }),
+        h('div', {
+          class: 'meta',
+          text: [
+            globalThis.EgitimPlatforms ? EgitimPlatforms.platformLabel(s.platform || s.url) : '',
+            s.tabId != null && s.id.startsWith('t') ? `Sekme #${s.tabId}` : `Pencere #${s.windowId}`,
+            s.managed ? 'eklenti açtı' : '',
+          ].filter(Boolean).join(' · '),
+        }),
         s.closedAt ? null : h('button', {
           type: 'button',
           class: 'goto',
@@ -338,7 +345,7 @@
   ['r-status', 'r-sev'].forEach((id) => $(id).addEventListener('change', renderFindings));
 
   $('stop-all').addEventListener('click', async () => {
-    if (!confirm('Açık tüm UEK sekmelerinde otomatik ilerleme durdurulsun mu? (Sayfa yenilenince yeniden başlar.)')) return;
+    if (!confirm('Açık tüm eğitim sekmelerinde otomatik ilerleme durdurulsun mu? (Sayfa yenilenince yeniden başlar.)')) return;
     try {
       const res = await api.runtime.sendMessage({ type: 'uek-stop-all' });
       toast(`${(res && res.stopped) || 0} sekmede durduruldu.`);

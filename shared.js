@@ -1,10 +1,15 @@
 /**
  * Katalog bağlantısı ayrıştırma — content script ve popup paylaşır.
+ * Platform kuralları platforms.js (EgitimPlatforms) üzerinden yürütülür;
+ * mevcut UEKLinks API'si geriye dönük uyumluluk için korunur.
  */
 (function (root) {
   'use strict';
 
+  const P = root.EgitimPlatforms;
+
   function parseUrl(href, base) {
+    if (P) return P.parseUrl(href, base);
     try {
       return new URL(href, base || undefined);
     } catch (_) {
@@ -12,99 +17,57 @@
     }
   }
 
-  function isUekHost(hostname) {
-    return /(?:^|\.)uzaktanegitimkapisi\.gov\.tr$/i.test(hostname)
-      || /(?:^|\.)cbiko\.gov\.tr$/i.test(hostname);
-  }
-
-  function isDirectPlayerUrl(href) {
-    const u = parseUrl(href);
-    if (!u || !isUekHost(u.hostname)) return false;
-    return /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(u.pathname);
-  }
-
-  function isTrainingUrl(href, base) {
-    const u = parseUrl(href, base);
-    if (!u || !isUekHost(u.hostname)) return false;
-    if (!/\/Egitimler\//i.test(u.pathname)) return false;
-    if (isDirectPlayerUrl(u.href)) return true;
-    return u.searchParams.has('Uniq') || u.searchParams.has('uniq');
-  }
-
-  function rank(href) {
-    if (/\/ScormV2/i.test(href)) return 3;
-    if (/\/Video/i.test(href)) return 2;
-    return 1;
-  }
-
   function cleanTitle(text) {
+    if (P) return P.cleanTitle(text);
     const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 160);
     return t || 'Eğitim';
   }
 
-  function fold(s) {
-    return String(s == null ? '' : s)
-      .replace(/[İIı]/g, 'i')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+  function isDirectPlayerUrl(href, base) {
+    return !!(P && P.isDirectPlayerUrl(href, base));
+  }
+
+  function isTrainingUrl(href, base) {
+    return !!(P && P.isTrainingUrl(href, base));
   }
 
   function addLink(map, href, title, base, done) {
-    if (!isTrainingUrl(href, base)) return;
+    if (!P || !P.isTrainingUrl(href, base)) return;
     const u = parseUrl(href, base);
+    if (!u) return;
     u.hash = '';
     const url = u.href;
-    const uniq = (u.searchParams.get('Uniq') || u.searchParams.get('uniq') || '').toLowerCase();
-    const key = uniq || url;
-    const item = { url, title: cleanTitle(title), done: !!done };
+    const plat = P.detectByHost(u.hostname);
+    const key = P.courseKey(url);
+    const item = {
+      url,
+      title: cleanTitle(title),
+      done: !!done,
+      platform: plat ? plat.id : '',
+    };
     const prev = map.get(key);
-    if (!prev || rank(url) > rank(prev.url)) {
+    if (!prev || P.rankUrl(url) > P.rankUrl(prev.url)) {
       map.set(key, {
         url,
         title: item.title !== 'Eğitim' ? item.title : (prev && prev.title) || item.title,
         done: item.done || !!(prev && prev.done),
+        platform: item.platform || (prev && prev.platform) || '',
       });
       return;
     }
     if (item.done) prev.done = true;
     if (prev.title === 'Eğitim' && item.title !== 'Eğitim') prev.title = item.title;
+    if (!prev.platform && item.platform) prev.platform = item.platform;
   }
 
-  /** Kart metni veya rozeti eğitimin bittiğini söylüyorsa true. "Devam et" varsa bitmiş sayılmaz. */
-  function looksDone(el) {
-    let node = el && el.parentElement;
-    let card = null;
-    for (let i = 0; node && node !== el.ownerDocument.body && i < 6; i += 1) {
-      const text = (node.innerText || '').replace(/\s+/g, ' ').trim();
-      if (text.length > 40 && text.length < 700) {
-        card = node;
-        break;
-      }
-      node = node.parentElement;
-    }
-    if (!card) return false;
-    const text = fold(card.innerText || '');
-    if (/egitime devam et|\bdevam et\b/.test(text)) return false;
-    if (/egitime tekrar katil|\btamamlandi\b|\btamamlanmis\b/.test(text)) return true;
-    try {
-      return !!card.querySelector(
-        '[title*="tamamland" i], [aria-label*="tamamland" i], [class*="tamamland" i], [class*="completed" i]'
-      );
-    } catch (_) {
-      return false;
-    }
+  function titleFrom(el, plat) {
+    if (plat && typeof plat.titleFrom === 'function') return plat.titleFrom(el);
+    return cleanTitle(el.innerText || el.getAttribute('title') || el.getAttribute('aria-label') || '');
   }
 
-  function titleFrom(el) {
-    const own = cleanTitle(el.innerText || el.getAttribute('title') || el.getAttribute('aria-label') || '');
-    if (own !== 'Eğitim') return own;
-    const card = el.closest && el.closest('article, li, tr, .card, .egitim, .course');
-    if (!card) return own;
-    const heading = card.querySelector('h1, h2, h3, h4, strong');
-    return heading ? cleanTitle(heading.innerText) : own;
+  function looksDone(el, plat) {
+    if (plat && typeof plat.looksDone === 'function') return !!plat.looksDone(el);
+    return false;
   }
 
   function collectFromDocument(doc) {
@@ -113,7 +76,10 @@
     doc.querySelectorAll('a[href], [data-href], [data-url]').forEach((el) => {
       const raw = el.getAttribute('href') || el.getAttribute('data-href') || el.getAttribute('data-url');
       if (!raw || /^\s*javascript:/i.test(raw)) return;
-      addLink(map, raw, titleFrom(el), base, looksDone(el));
+      const u = parseUrl(raw, base);
+      const plat = u && P ? P.detectByHost(u.hostname) : null;
+      if (!plat) return;
+      addLink(map, raw, titleFrom(el, plat), base, looksDone(el, plat));
     });
     return [...map.values()];
   }
@@ -129,7 +95,7 @@
 
   function mergeItems(list) {
     const map = new Map();
-    (list || []).forEach((item) => addLink(map, item.url, item.title, undefined, item && item.done));
+    (list || []).forEach((item) => addLink(map, item && item.url, item && item.title, undefined, item && item.done));
     return [...map.values()];
   }
 

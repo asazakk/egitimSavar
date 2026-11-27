@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "egitimSavar",
-  "version": "1.7.8",
-  "description": "Uzaktan Eğitim Kapısı eğitimlerini ayrı sekmelerde veya ekran pencerelerinde otomatik oynatır: hızlandırır, sesi kapatır, ilerletir ve takip raporu sunar.",
+  "version": "1.8.0",
+  "description": "Uzaktan Eğitim Kapısı ve Udemy eğitimlerini ayrı sekmelerde veya ekran pencerelerinde otomatik oynatır: hızlandırır, sesi kapatır, ilerletir ve takip raporu sunar.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -26,11 +26,13 @@
     "https://vod2.uzaktanegitimkapisi.gov.tr/*",
     "https://vod3.uzaktanegitimkapisi.gov.tr/*",
     "https://uzaktanegitimkapisi.cbiko.gov.tr/*",
-    "https://*.cbiko.gov.tr/*"
+    "https://*.cbiko.gov.tr/*",
+    "https://udemy.com/*",
+    "https://*.udemy.com/*"
   ],
   "background": {
     "service_worker": "background.js",
-    "scripts": ["report-core.js", "background.js"]
+    "scripts": ["platforms.js", "report-core.js", "background.js"]
   },
   "content_scripts": [
     {
@@ -40,9 +42,11 @@
         "https://vod2.uzaktanegitimkapisi.gov.tr/*",
         "https://vod3.uzaktanegitimkapisi.gov.tr/*",
         "https://uzaktanegitimkapisi.cbiko.gov.tr/*",
-        "https://*.cbiko.gov.tr/*"
+        "https://*.cbiko.gov.tr/*",
+        "https://udemy.com/*",
+        "https://*.udemy.com/*"
       ],
-      "js": ["shared.js", "content.js"],
+      "js": ["platforms.js", "shared.js", "adapters/uek.js", "adapters/udemy.js", "content.js"],
       "all_frames": true,
       "match_about_blank": true,
       "run_at": "document_idle"
@@ -54,7 +58,9 @@
         "https://vod2.uzaktanegitimkapisi.gov.tr/*",
         "https://vod3.uzaktanegitimkapisi.gov.tr/*",
         "https://uzaktanegitimkapisi.cbiko.gov.tr/*",
-        "https://*.cbiko.gov.tr/*"
+        "https://*.cbiko.gov.tr/*",
+        "https://udemy.com/*",
+        "https://*.udemy.com/*"
       ],
       "js": ["page-guard.js"],
       "world": "MAIN",

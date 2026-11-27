@@ -4,9 +4,14 @@
  */
 const api = typeof browser !== 'undefined' ? browser : chrome;
 
-// Chrome: arka plan bir service worker; ortak dosya importScripts ile yüklenir.
-// Firefox: manifest'teki background.scripts listesi report-core.js'i zaten yükler.
+// Chrome: arka plan bir service worker; ortak dosyalar importScripts ile yüklenir.
+// Firefox: manifest'teki background.scripts listesi platforms.js ve report-core.js'i zaten yükler.
 if (typeof importScripts === 'function') {
+  try {
+    importScripts('platforms.js');
+  } catch (e) {
+    console.warn('[egitimSavar-BG] platforms.js yüklenemedi', e && e.message);
+  }
   try {
     importScripts('report-core.js');
   } catch (e) {
@@ -66,15 +71,25 @@ function reportMutate(fn) {
   return reportTail;
 }
 
+function detectPlatformId(item, url) {
+  if (item && item.platform) return item.platform;
+  if (item && item.data && item.data.platform) return item.data.platform;
+  const P = globalThis.EgitimPlatforms;
+  const plat = P && url ? P.detectByUrl(url) : null;
+  return plat ? plat.id : '';
+}
+
 function newSession(key, item, map, tabMap) {
   const mapped = (item.tabId != null && tabMap && tabMap[String(item.tabId)])
     || (item.windowId != null ? map[String(item.windowId)] : null);
+  const url = item.url || (mapped && mapped.url) || '';
   return {
     id: key,
     windowId: item.windowId,
     tabId: item.tabId,
+    platform: detectPlatformId(item, url) || (mapped && mapped.platform) || '',
     title: (mapped && mapped.title) || item.title || item.tabTitle || 'Eğitim',
-    url: item.url || (mapped && mapped.url) || '',
+    url,
     managed: !!mapped,
     startedAt: item.ts,
     lastSeen: item.ts,
@@ -124,6 +139,10 @@ async function applyReportItems(items) {
     if (item.windowId != null) s.windowId = item.windowId;
     if (item.tabTitle && s.title === 'Eğitim') s.title = item.tabTitle;
     if (item.url && item.frameId === 0) s.url = item.url;
+    if (!s.platform) {
+      const pid = detectPlatformId(item, item.url || s.url);
+      if (pid) s.platform = pid;
+    }
     const frame = item.frameId === 0 ? 'top' : `f${item.frameId}`;
 
     if (item.kind === 'event') {
@@ -414,8 +433,7 @@ async function waitUntilCourseReady(tabId) {
     const complete = tab.status === 'complete' && url && !/^about:/i.test(url);
     if (complete && url === lastUrl) {
       if (!stableSince) stableSince = Date.now();
-      const onPlayer = /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(url)
-        || /story\.html/i.test(url);
+      const onPlayer = isPlayerUrl(url);
       const holdMs = onPlayer ? 5000 : 4500;
       if (Date.now() - stableSince >= holdMs) return;
     } else {
@@ -655,6 +673,7 @@ function statusKeyForTab(report, tabId) {
 }
 
 function isPlayerUrl(url) {
+  if (globalThis.EgitimPlatforms) return globalThis.EgitimPlatforms.isPlayerUrl(url);
   return /\/Egitimler\/(ScormV2|Video)(\/|$)/i.test(url || '')
     || /story\.html/i.test(url || '')
     || /vod\d*\.uzaktanegitimkapisi/i.test(url || '');
@@ -720,6 +739,7 @@ async function stopAll() {
 }
 
 function uniqKey(url) {
+  if (globalThis.EgitimPlatforms) return globalThis.EgitimPlatforms.sessionKey(url);
   try {
     const u = new URL(url);
     return (u.searchParams.get('Uniq') || u.searchParams.get('uniq') || u.origin + u.pathname).toLowerCase();
@@ -809,6 +829,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         kind: 'event',
         level: message.level,
         text: message.text,
+        platform: message.platform || '',
         windowId: sender.tab.windowId,
         tabId: sender.tab.id,
         frameId,

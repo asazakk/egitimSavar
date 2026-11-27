@@ -77,9 +77,15 @@
       const pct = main && main.duration > 0
         ? Math.min(100, Math.round((main.time / main.duration) * 100))
         : null;
+      const platform = (s.platform || (main && main.platform) || '');
+      const platformLabel = root.EgitimPlatforms
+        ? root.EgitimPlatforms.platformLabel(platform || s.url)
+        : (platform ? platform.toUpperCase() : '');
       return {
         session: s,
         id: s.id,
+        platform,
+        platformLabel,
         title: s.title || 'Eğitim',
         windowId: s.windowId,
         status,
